@@ -32,6 +32,7 @@ Optional: [snacks.nvim](https://github.com/folke/snacks.nvim) for the `<C-f>` fi
   cmd = { "NovibeAct", "NovibeProfile", "NovibeDistill", "NovibePromote", "NovibeReset", "NovibeStatus", "NovibeConventions", "NovibeLearns" },
   keys = {
     { "<leader>aa", ":NovibeAct<CR>", mode = "v", desc = "novibe: fill implementation" },
+    { "<leader>aa", ":NovibeAct<CR>", mode = "n", desc = "novibe: act on current line" },
   },
   config = function()
     require("novibe").setup({
