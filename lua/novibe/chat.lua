@@ -66,8 +66,15 @@ local function apply_hls(buf_ns, bufnr, hls)
   end
 end
 
-local function schema_reminder()
-  return '\n\n[Respond ONLY in JSON: {"message":...,"changes":[...],"done":true/false}]'
+local function schema_reminder(pending)
+  local base = '\n\n[Respond ONLY in JSON: {"message":...,"changes":[...],"done":true/false}]'
+  if not pending or #pending == 0 then return base end
+  local lines = { base, "\n[IMPORTANT: none of the previously proposed changes have been applied to any file yet — they are still pending. When you generate revised changes, the \"find\" field must match the CURRENT unmodified file content, not code from your previous proposals. Files still pending:" }
+  for _, c in ipairs(pending) do
+    table.insert(lines, "  - " .. c.file .. (c.description and (": " .. c.description) or ""))
+  end
+  table.insert(lines, "]")
+  return table.concat(lines, "\n")
 end
 
 local TITLE_IDLE = "%#Title# novibe %#Normal#  ·  :w send  ·  q quit"
@@ -180,7 +187,8 @@ function M.open(initial_response, claude_bin)
 
     local stop = start_spinner()
 
-    local msg = reply ~= "" and (reply .. schema_reminder()) or ("continue" .. schema_reminder())
+    local reminder = schema_reminder(pending_changes)
+    local msg = reply ~= "" and (reply .. reminder) or ("continue" .. reminder)
 
     vim.system(
       { claude_bin, "--continue", "--output-format", "json", "--print", msg },
