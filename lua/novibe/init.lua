@@ -89,6 +89,20 @@ local function start_spinner(bufnr, start_line, end_line)
   end
 end
 
+function M.statusline()
+  if not M._last_usage then return "" end
+  local u = M._last_usage
+  local parts = {}
+  if u.cost_usd then
+    table.insert(parts, string.format("$%.4f", u.cost_usd))
+  end
+  if u.input_tokens and u.context_window and u.context_window > 0 then
+    local pct = math.floor(u.input_tokens / u.context_window * 100)
+    table.insert(parts, string.format("ctx %d%%", pct))
+  end
+  return #parts > 0 and (" " .. table.concat(parts, " · ")) or ""
+end
+
 function M.setup(opts)
   config.setup(opts)
   if config.options.keymap then
@@ -220,20 +234,7 @@ function M.fill(line1, line2)
         if usage then
           M._session_cost = M._session_cost + (usage.cost_usd or 0)
           M._last_usage   = usage
-          local parts = {}
-          if usage.cost_usd then
-            table.insert(parts, string.format("$%.4f", usage.cost_usd))
-          end
-          if usage.input_tokens and usage.context_window and usage.context_window > 0 then
-            local pct = math.floor(usage.input_tokens / usage.context_window * 100)
-            table.insert(parts, string.format("ctx %d%%", pct))
-          end
-          if usage.output_tokens then
-            table.insert(parts, usage.output_tokens .. " tok out")
-          end
-          if #parts > 0 then
-            vim.notify("novibe: " .. table.concat(parts, " · "), vim.log.levels.INFO)
-          end
+          pcall(function() require("lualine").refresh() end)
         end
 
         if M._session_count == SESSION_WARN_AFTER then
