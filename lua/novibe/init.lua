@@ -1,0 +1,222 @@
+local M = {}
+local config  = require("novibe.config")
+local input   = require("novibe.input")
+local chat    = require("novibe.chat")
+local apply   = require("novibe.apply")
+local glob    = require("novibe.glob")
+local no_vibe = require("novibe.no_vibe")
+local learn   = require("novibe.learn")
+
+M._last_fill = nil  -- { original, bufnr, start_line }
+
+local ns = vim.api.nvim_create_namespace("novibe")
+local spinner_frames = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
+local loading_messages = {
+  "cooking…",
+  "typing so you don't have to…",
+  "filling the blanks…",
+  "connecting the dots…",
+  "following your lead…",
+  "reading the comments…",
+  "doing the boring part…",
+  "translating intent…",
+  "implementing your vision…",
+  "turning spec into code…",
+  "no vibes, just work…",
+  "respecting the architecture…",
+  "staying in scope…",
+  "asking claude nicely…",
+  "not redesigning anything…",
+}
+
+local function random_loading_msg()
+  return loading_messages[math.random(#loading_messages)]
+end
+
+
+local function find_claude()
+  local found = vim.fn.exepath("claude")
+  if found ~= "" then return found end
+  for _, path in ipairs({
+    vim.fn.expand("~/.local/bin/claude"),
+    "/usr/local/bin/claude",
+    "/opt/homebrew/bin/claude",
+  }) do
+    if vim.fn.filereadable(path) == 1 then return path end
+  end
+  return nil
+end
+M._find_claude = find_claude
+
+local function start_spinner(bufnr, start_line, end_line)
+  local frame = 1
+  local msg   = random_loading_msg()
+  local virt  = { { { spinner_frames[frame] .. "  " .. msg, "Comment" } } }
+
+  local top_id = vim.api.nvim_buf_set_extmark(bufnr, ns, start_line - 1, 0, {
+    virt_lines = virt, virt_lines_above = true,
+  })
+  local bot_id = vim.api.nvim_buf_set_extmark(bufnr, ns, end_line - 1, 0, {
+    virt_lines = virt,
+  })
+
+  local timer = vim.uv.new_timer()
+  timer:start(80, 80, vim.schedule_wrap(function()
+    if not vim.api.nvim_buf_is_valid(bufnr) then
+      timer:stop(); timer:close(); return
+    end
+    frame = (frame % #spinner_frames) + 1
+    local v = { { { spinner_frames[frame] .. "  " .. msg, "Comment" } } }
+    vim.api.nvim_buf_set_extmark(bufnr, ns, start_line - 1, 0,
+      { id = top_id, virt_lines = v, virt_lines_above = true })
+    vim.api.nvim_buf_set_extmark(bufnr, ns, end_line - 1, 0,
+      { id = bot_id, virt_lines = v })
+  end))
+
+  return function()
+    timer:stop(); timer:close()
+    if vim.api.nvim_buf_is_valid(bufnr) then
+      vim.api.nvim_buf_del_extmark(bufnr, ns, top_id)
+      vim.api.nvim_buf_del_extmark(bufnr, ns, bot_id)
+    end
+  end
+end
+
+function M.setup(opts)
+  config.setup(opts)
+  if config.options.keymap then
+    vim.keymap.set("v", config.options.keymap, function()
+      M.fill()
+    end, { desc = "novibe: fill implementation", silent = true })
+  end
+end
+
+function M.fill(line1, line2)
+  local claude_bin = find_claude()
+  if not claude_bin then
+    vim.notify("novibe: claude binary not found", vim.log.levels.ERROR)
+    return
+  end
+
+  vim.api.nvim_feedkeys(
+    vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "x", false
+  )
+
+  local bufnr      = vim.api.nvim_get_current_buf()
+  local start_line = line1 or vim.fn.getpos("'<")[2]
+  local end_line   = line2 or vim.fn.getpos("'>")[2]
+  local total      = vim.api.nvim_buf_line_count(bufnr)
+
+  local lines     = vim.api.nvim_buf_get_lines(bufnr, start_line - 1, end_line, false)
+  local selection = table.concat(lines, "\n")
+
+  local ctx_before = vim.api.nvim_buf_get_lines(bufnr, math.max(0, start_line - 11), start_line - 1, false)
+  local ctx_after  = vim.api.nvim_buf_get_lines(bufnr, end_line, math.min(total, end_line + 10), false)
+
+  input.open(function(user_prompt)
+    if user_prompt == nil then return end
+
+    -- #teach mode: diff current selection against last fill
+    if vim.startswith(user_prompt, "#teach") then
+      if not M._last_fill then
+        vim.notify("novibe: no recent fill to teach from", vim.log.levels.WARN)
+        return
+      end
+      local reason  = vim.trim(user_prompt:sub(7))
+      local current = table.concat(
+        vim.api.nvim_buf_get_lines(bufnr, start_line - 1, end_line, false), "\n"
+      )
+      learn.teach(
+        M._last_fill.original,
+        current,
+        reason,
+        vim.api.nvim_buf_get_name(bufnr),
+        claude_bin,
+        config.options.learn and config.options.learn.auto_extract_after,
+        config.options.active_profile
+      )
+      return
+    end
+
+    local filename    = vim.api.nvim_buf_get_name(bufnr)
+    local no_vibe_txt = no_vibe.load(filename)
+    local parts = {
+      config.options.system_prompt,
+      no_vibe_txt and ("\nProject conventions:\n" .. no_vibe_txt) or "",
+      "",
+    }
+    if #ctx_before > 0 then
+      table.insert(parts, "Context before selection (DO NOT reproduce this):")
+      table.insert(parts, table.concat(ctx_before, "\n"))
+      table.insert(parts, "")
+    end
+    table.insert(parts, "Selection to modify (return in the 'code' field ONLY):")
+    table.insert(parts, selection)
+    if #ctx_after > 0 then
+      table.insert(parts, "")
+      table.insert(parts, "Context after selection (DO NOT reproduce this):")
+      table.insert(parts, table.concat(ctx_after, "\n"))
+    end
+    if user_prompt ~= "" then
+      table.insert(parts, "")
+      table.insert(parts, "Instruction: " .. user_prompt)
+    end
+    local prompt = table.concat(parts, "\n")
+
+    local stop_spinner = start_spinner(bufnr, start_line, end_line)
+
+    local profile = config.options.active_profile
+    local cmd = { claude_bin }
+    if config.options.bare then table.insert(cmd, "--bare") end
+    if profile and profile.model  then vim.list_extend(cmd, { "--model",  profile.model }) end
+    if profile and profile.effort then vim.list_extend(cmd, { "--effort", profile.effort }) end
+    vim.list_extend(cmd, { "--continue", "--print", prompt })
+
+    vim.system(
+      cmd,
+      { text = true },
+      vim.schedule_wrap(function(result)
+        stop_spinner()
+
+        if result.code ~= 0 or (result.stdout or "") == "" then
+          vim.notify(
+            string.format("novibe: exit %d — %s", result.code, vim.trim(result.stderr or "")),
+            vim.log.levels.ERROR
+          )
+          return
+        end
+
+        local raw = vim.trim(result.stdout)
+
+        -- try JSON first; fall back to treating entire response as plain code
+        local ok, response = pcall(vim.json.decode, raw)
+        if not ok then
+          response = { code = raw, changes = {}, message = nil, done = true }
+        end
+
+        -- splice the code replacement
+        if response.code and response.code ~= vim.NIL then
+          local new_lines = vim.split(vim.trim(response.code), "\n", { plain = true })
+          vim.api.nvim_buf_set_lines(bufnr, start_line - 1, end_line, false, new_lines)
+          M._last_fill = { original = vim.trim(response.code), bufnr = bufnr, start_line = start_line }
+        end
+
+        local has_changes = response.changes and #response.changes > 0
+        local has_message = response.message and response.message ~= vim.NIL
+
+        -- apply immediately if done and no review needed
+        if response.done and has_changes and not has_message then
+          apply.apply_all(response.changes)
+          return
+        end
+
+        -- open chat float for anything needing review or follow-up
+        if has_message or has_changes then
+          chat.open(response, claude_bin)
+        end
+      end)
+    )
+  end)
+end
+
+return M
