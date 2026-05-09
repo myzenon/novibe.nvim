@@ -2,13 +2,13 @@
 
 > *"No vibe, just smart auto completion."*
 
-A minimal Neovim plugin that uses Claude (or opencode) as a **code fulfillment tool, not a vibe coder**.
+A minimal Neovim plugin that uses your AI coding CLI ([Claude Code](https://claude.ai/code) or [opencode](https://opencode.ai/)) as a **code fulfillment tool, not a vibe coder**.
 
 You design the structure. You write the skeleton — function signature, comments describing intent and algorithm. The model fills the implementation within your boundaries. You already understand the code because you designed it.
 
 **This is not vibe coding.** Vibe coding (Andrej Karpathy) is when you stop understanding the code — you describe, AI generates, you accept without reading. `novibe.nvim` requires *more* thinking upfront, not less.
 
-> **Irony disclosure:** this plugin was itself written by vibe coding. The author described, Claude generated, the author accepted without fully reading. Do as I say, not as I do.
+> **Irony disclosure:** this plugin was itself written by vibe coding. The author described, an AI agent generated, the author accepted without fully reading. Do as I say, not as I do.
 
 **Inspired by [ThePrimeagen/99](https://github.com/ThePrimeagen/99)** — rebuilt around a stricter philosophy: no agentic behavior, no auto-applied changes, stable API.
 
@@ -36,15 +36,16 @@ Optional: [snacks.nvim](https://github.com/folke/snacks.nvim) for the `<C-f>` fi
   config = function()
     require("novibe").setup({
       profiles = {
-        { label = "Fast", provider = "claude", model = "haiku", effort = "low" },
-        { label = "Best", provider = "claude", model = "opus",  effort = "max" },
+        { label = "Claude Best", provider = "claude",   model = "opus",                            effort = "max"  },
+        { label = "OC Sonnet",   provider = "opencode", model = "anthropic/claude-sonnet-4-5",     effort = "high" },
+        -- See CONFIG.md for the full list of options
       },
     })
   end,
 }
 ```
 
-See **[CONFIG.md](./CONFIG.md)** for full configuration, profiles, conventions, opencode setup, and the system prompt.
+See **[CONFIG.md](./CONFIG.md)** for full configuration, profiles, conventions, provider differences, and the system prompt.
 
 ---
 
@@ -111,4 +112,4 @@ Optional lualine integration for persistent display — see [CONFIG.md → Statu
 
 ---
 
-For profiles, conventions, opencode setup, and full configuration → **[CONFIG.md](./CONFIG.md)**.
+For profiles, conventions, provider differences, and full configuration → **[CONFIG.md](./CONFIG.md)**.

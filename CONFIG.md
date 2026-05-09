@@ -8,7 +8,7 @@ Detailed reference for profiles, conventions, opencode integration, and `setup()
 
 - [Fresh project setup](#fresh-project-setup)
 - [Profiles](#profiles)
-- [opencode notes](#opencode-notes)
+- [Provider differences](#provider-differences)
 - [Conventions](#conventions)
 - [Promotion](#promotion)
 - [Configuration reference](#configuration-reference)
@@ -19,13 +19,16 @@ Detailed reference for profiles, conventions, opencode integration, and `setup()
 
 ## Fresh project setup
 
-1. In your project root, run `claude` (interactive Claude Code CLI)
-2. Run `/init` — Claude analyzes the project and generates `CLAUDE.md`
-3. Tell Claude:
-   > "Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/claude-init.md and follow the instructions."
-4. Claude updates `CLAUDE.md` with the novibe format and generates `.no_vibe/convention-project.md`. Done.
+The fastest way to bootstrap conventions is to ask your AI CLI to do it. Both Claude Code and opencode work — pick whichever you prefer:
 
-Because Claude reads `CLAUDE.md` in every future interactive session, it will always know the convention format without you repeating it.
+1. Open a terminal in your project root and start the interactive CLI of your choice:
+   - **Claude Code**: `claude`, then run `/init`
+   - **opencode**: `opencode`
+2. In the CLI, paste this instruction:
+   > "Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/claude-init.md and follow the instructions."
+3. The agent analyzes your project, generates `.no_vibe/convention-project.md` in the novibe format, and (with Claude Code) writes a `CLAUDE.md` so the format auto-loads in every future session.
+
+> The bootstrap file is named `claude-init.md` for historical reasons but the instructions inside are CLI-agnostic — opencode reads and follows them just fine.
 
 You can add more `convention-*.md` files later (`convention-frontend.md`, `convention-style.md`, etc.). All matching files are loaded and merged.
 
@@ -90,12 +93,25 @@ Recommended for cheaper / less reliable models that tend to hallucinate file pat
 
 ---
 
-## opencode notes
+## Provider differences
 
-- **Sessions**: novibe captures the `sessionID` from opencode's first response and reuses it via `--session ID` for follow-up fills, mirroring Claude's `--continue` behavior. `:NovibeReset` clears it.
-- **`bare` mode**: silently ignored on opencode (it's a Claude-specific flag).
-- **Context window %**: not shown for opencode (the CLI doesn't expose it). Cost and token counts still display.
-- **Tools/agents**: opencode's default `build` agent has tool access. novibe's strict JSON system prompt usually keeps the model from invoking tools, but if you see file edits happening outside novibe's review flow, configure a no-tools agent in opencode (see `opencode agent`) and reference it as your default.
+Both providers are first-class. novibe normalizes most of the differences (session continuity, JSON output, usage stats), but a few CLI quirks surface in the UI. Knowing them helps you read the status line and pick the right `effort` level.
+
+### Claude Code
+
+- **`--continue`** is used to carry session context across fills. `:NovibeReset` skips it on the next fill.
+- **`--bare`** mode is supported (set `bare = true` in `setup()` if you auth via `ANTHROPIC_API_KEY`).
+- **Context window %** is reported by the CLI and shown in the input title / chat winbar / lualine.
+- **`--effort`** levels: `low`, `medium`, `high`, `xhigh` (Opus only), `max`.
+
+### opencode
+
+- **Sessions**: novibe captures the `sessionID` from the first response and reuses it via `--session ID` for follow-up fills. Mirrors Claude's `--continue` UX. `:NovibeReset` clears it.
+- **`bare` mode**: silently ignored — it's a Claude-specific flag.
+- **Context window %**: not shown — the opencode CLI doesn't expose context window size. Cost and token counts still display.
+- **`--variant`** maps from `effort`. Same level names, but support depends on the model.
+- **Tools / default agent**: opencode's default `build` agent has tool access. novibe's strict JSON system prompt usually keeps the model from invoking tools, but if you see file edits happening outside the review flow, configure a no-tools agent (see `opencode agent`) and reference it as your default.
+- **Hallucinated paths**: cheaper models on opencode are more prone to inventing file paths in `changes[]`. Set `file_context = true` on the profile to inject a "Project files" allow-list — see [Profiles → fields](#fields).
 
 ---
 
@@ -184,7 +200,7 @@ A hooks file never sees CSS conventions. A component file never sees backend rul
 
 ### Generating rules with AI
 
-Paste this prompt into Claude (or any AI):
+Paste this prompt into your AI of choice (Claude Code, opencode, ChatGPT, etc.):
 
 > I want you to generate a `.no_vibe/convention-project.md` file for my project. This file tells an AI code-filling tool which conventions to follow when filling in code.
 >
@@ -356,4 +372,4 @@ Write skeleton → visual select → <leader>nv
 
 The model responds in a structured JSON schema (`{code, message, changes, done}`). The plugin splices `response.code` into your buffer immediately. Any changes outside your selection (imports, type definitions, other files) are shown as a diff in a side panel on the right — you can read the in-scope fill alongside the proposed out-of-scope diffs, and confirm before anything is written.
 
-**Path validation**: Before opening the side panel, novibe checks every `change.file` exists on disk. If the model invented a path (more common with cheaper models on opencode), the plugin silently sends a corrective follow-up listing the missing paths and asking for a revision. Up to one retry. If validation still fails, the side panel opens anyway so you can react manually. Combined with `file_context = true` in your profile, hallucinated paths become rare.
+**Path validation**: Before opening the side panel, novibe checks every `change.file` exists on disk. If the model invented a path (more common with cheaper / less reliable models, regardless of provider), the plugin silently sends a corrective follow-up listing the missing paths and asking for a revision. Up to one retry. If validation still fails, the side panel opens anyway so you can react manually. Combined with `file_context = true` in your profile, hallucinated paths become rare.
