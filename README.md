@@ -28,7 +28,7 @@ Optional: [snacks.nvim](https://github.com/folke/snacks.nvim) for the `<C-f>` fi
 
 ```lua
 {
-  dir = "~/path/to/novibe.nvim",  -- or your GitHub path once published
+  "myzenon/novibe.nvim",
   cmd = { "NovibeAct", "NovibeProfile", "NovibeDistill", "NovibeReset", "NovibeStatus", "NovibeConventions" },
   keys = {
     { "<leader>nv", ":NovibeAct<CR>", mode = "v", desc = "novibe: fill implementation" },
