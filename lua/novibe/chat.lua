@@ -1,4 +1,5 @@
 local apply = require("novibe.apply")
+local util  = require("novibe.util")
 
 local M = {}
 
@@ -182,7 +183,7 @@ function M.open(initial_response, claude_bin)
     local msg = reply ~= "" and (reply .. schema_reminder()) or ("continue" .. schema_reminder())
 
     vim.system(
-      { claude_bin, "--continue", "--print", msg },
+      { claude_bin, "--continue", "--output-format", "json", "--print", msg },
       { text = true },
       vim.schedule_wrap(function(result)
         stop()
@@ -196,11 +197,7 @@ function M.open(initial_response, claude_bin)
           return
         end
 
-        local raw = vim.trim(result.stdout)
-        local ok, response = pcall(vim.json.decode, raw)
-        if not ok then
-          response = { message = raw, changes = {}, done = false }
-        end
+        local response = util.parse_claude_output(result.stdout)
 
         if response.changes and #response.changes > 0 then
           pending_changes = response.changes

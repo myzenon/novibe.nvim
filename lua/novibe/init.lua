@@ -6,10 +6,13 @@ local apply   = require("novibe.apply")
 local glob    = require("novibe.glob")
 local no_vibe = require("novibe.no_vibe")
 local learn   = require("novibe.learn")
+local util    = require("novibe.util")
 
 M._last_fill      = nil    -- { original, bufnr, start_line }
 M._session_count  = 0      -- fills since last reset
 M._skip_continue  = false  -- set true by :NovibeReset; consumed on next fill
+M._session_cost   = 0.0    -- cumulative USD this Neovim session
+M._last_usage     = nil    -- usage table from most recent fill
 
 local SESSION_WARN_AFTER = 10
 
@@ -187,7 +190,7 @@ function M.fill(line1, line2)
     if profile and profile.model  then vim.list_extend(cmd, { "--model",  profile.model }) end
     if profile and profile.effort then vim.list_extend(cmd, { "--effort", profile.effort }) end
     if use_continue then table.insert(cmd, "--continue") end
-    vim.list_extend(cmd, { "--print", prompt })
+    vim.list_extend(cmd, { "--output-format", "json", "--print", prompt })
 
     vim.system(
       cmd,
@@ -203,13 +206,7 @@ function M.fill(line1, line2)
           return
         end
 
-        local raw = vim.trim(result.stdout)
-
-        -- try JSON first; fall back to treating entire response as plain code
-        local ok, response = pcall(vim.json.decode, raw)
-        if not ok then
-          response = { code = raw, changes = {}, message = nil, done = true }
-        end
+        local response, usage = util.parse_claude_output(result.stdout)
 
         -- splice the code replacement
         if response.code and response.code ~= vim.NIL then
@@ -219,6 +216,26 @@ function M.fill(line1, line2)
         end
 
         M._session_count = M._session_count + 1
+
+        if usage then
+          M._session_cost = M._session_cost + (usage.cost_usd or 0)
+          M._last_usage   = usage
+          local parts = {}
+          if usage.cost_usd then
+            table.insert(parts, string.format("$%.4f", usage.cost_usd))
+          end
+          if usage.input_tokens and usage.context_window and usage.context_window > 0 then
+            local pct = math.floor(usage.input_tokens / usage.context_window * 100)
+            table.insert(parts, string.format("ctx %d%%", pct))
+          end
+          if usage.output_tokens then
+            table.insert(parts, usage.output_tokens .. " tok out")
+          end
+          if #parts > 0 then
+            vim.notify("novibe: " .. table.concat(parts, " · "), vim.log.levels.INFO)
+          end
+        end
+
         if M._session_count == SESSION_WARN_AFTER then
           vim.notify(
             string.format("novibe: %d fills in this session — context is getting long. Run :NovibeReset to start fresh.", SESSION_WARN_AFTER),

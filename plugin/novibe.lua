@@ -78,6 +78,17 @@ vim.api.nvim_create_user_command("NovibeStatus", function()
     table.insert(lines, "Session:  " .. count .. " fill(s) with --continue")
   end
 
+  local cost = novibe._session_cost or 0
+  if cost > 0 then
+    table.insert(lines, string.format("Cost:     $%.4f this session", cost))
+  end
+
+  local usage = novibe._last_usage
+  if usage and usage.input_tokens and usage.context_window and usage.context_window > 0 then
+    local pct = math.floor(usage.input_tokens / usage.context_window * 100)
+    table.insert(lines, string.format("Context:  %d%% of %dk window (last fill)", pct, math.floor(usage.context_window / 1000)))
+  end
+
   local found = no_vibe.discover()
   if found then
     local names = {}
