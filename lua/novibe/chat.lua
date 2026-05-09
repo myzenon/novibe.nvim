@@ -86,9 +86,11 @@ function M.open(initial_response, claude_bin)
   -- store changes so confirmations can apply locally without a round-trip
   local pending_changes = initial_response.changes or {}
 
-  local ns   = vim.api.nvim_create_namespace("novibe_chat")
-  local buf  = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_name(buf, "novibe://chat")
+  local ns  = vim.api.nvim_create_namespace("novibe_chat")
+  local buf = vim.api.nvim_create_buf(false, true)
+  -- unique name per instance avoids "buffer name already in use" if a prior
+  -- chat buffer hasn't been wiped yet (rapid double-invocation)
+  pcall(vim.api.nvim_buf_set_name, buf, "novibe://chat/" .. vim.uv.hrtime())
   vim.bo[buf].buftype   = "acwrite"
   vim.bo[buf].bufhidden = "wipe"
 
@@ -99,22 +101,20 @@ function M.open(initial_response, claude_bin)
   vim.wo[win].linebreak = true
 
   local done = false
-  local marker_line = 0  -- 0-based line index of the MARKER
 
   local function set_content(r_lines, r_hls)
-    -- read-only section + marker + empty reply line
     local content = vim.list_extend(vim.deepcopy(r_lines), { MARKER, "" })
-    marker_line = #r_lines  -- 0-based
     vim.bo[buf].modifiable = true
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, content)
     apply_hls(ns, buf, r_hls)
 
-    -- make everything above the marker read-only via extmark with no sign
-    -- (soft guard: we just move cursor to reply area automatically)
+    -- focus the chat window before startinsert; otherwise insert mode would
+    -- activate in whatever window the user clicked over to during the spinner
     if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_set_current_win(win)
       vim.api.nvim_win_set_cursor(win, { #content, 0 })
+      vim.cmd("startinsert")
     end
-    vim.cmd("startinsert")
   end
 
   set_content(response_lines, hls)

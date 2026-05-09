@@ -74,6 +74,16 @@ local function get_buf(filepath)
 end
 
 function M.apply(change)
+  if type(change.file) ~= "string" or change.file == "" then
+    return false, "change is missing 'file'"
+  end
+  if type(change.find) ~= "string" then
+    return false, "change for " .. change.file .. " is missing 'find'"
+  end
+  if type(change.replace) ~= "string" then
+    return false, "change for " .. change.file .. " is missing 'replace'"
+  end
+
   local bufnr, err = get_buf(change.file)
   if not bufnr then return false, err end
 
@@ -84,7 +94,8 @@ function M.apply(change)
     return false, "could not locate block in " .. change.file .. "\nSearched for: " .. snippet
   end
 
-  local action    = change.action or "replace"
+  local action = (type(change.action) == "string" and change.action ~= "")
+    and change.action or "replace"
   local new_lines = vim.split(change.replace, "\n", { plain = true })
 
   if action == "replace" then

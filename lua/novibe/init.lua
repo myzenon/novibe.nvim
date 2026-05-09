@@ -131,6 +131,10 @@ function M.fill(line1, line2)
         vim.notify("novibe: no recent fill to teach from", vim.log.levels.WARN)
         return
       end
+      if M._last_fill.bufnr ~= bufnr then
+        vim.notify("novibe: last fill was in a different buffer — switch to it to use #teach", vim.log.levels.WARN)
+        return
+      end
       local reason  = vim.trim(user_prompt:sub(7))
       local current = table.concat(
         vim.api.nvim_buf_get_lines(bufnr, start_line - 1, end_line, false), "\n"

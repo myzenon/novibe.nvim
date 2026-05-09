@@ -12,7 +12,8 @@ function M.open(on_submit)
   local col = math.floor((screen_w - WIDTH - 2) / 2)
 
   local input_buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_name(input_buf, "novibe://input")
+  -- unique name avoids collision if a prior input buffer hasn't been wiped yet
+  pcall(vim.api.nvim_buf_set_name, input_buf, "novibe://input/" .. vim.uv.hrtime())
   vim.bo[input_buf].buftype = "acwrite"
   vim.bo[input_buf].bufhidden = "wipe"
   vim.bo[input_buf].filetype = "markdown"
