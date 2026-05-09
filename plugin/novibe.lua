@@ -20,6 +20,19 @@ vim.api.nvim_create_user_command("NovibeDistill", function()
   learn.extract(provider, bin, config.options.active_profile)
 end, { desc = "novibe: distill accumulated diffs into learned.md" })
 
+vim.api.nvim_create_user_command("NovibePromote", function()
+  local novibe  = require("novibe")
+  local config  = require("novibe.config")
+  local promote = require("novibe.promote")
+  local provider = novibe.active_provider()
+  local bin = provider.find_bin()
+  if not bin then
+    vim.notify("novibe: " .. provider.name .. " binary not found", vim.log.levels.ERROR)
+    return
+  end
+  promote.promote(provider, bin, config.options.active_profile)
+end, { desc = "novibe: review learned rules and promote mature ones to convention files" })
+
 vim.api.nvim_create_user_command("NovibeProfile", function()
   local config = require("novibe.config")
   local profiles = config.options.profiles or {}
@@ -116,7 +129,7 @@ vim.api.nvim_create_user_command("NovibeConventions", function()
   local no_vibe = require("novibe.no_vibe")
   local found   = no_vibe.discover()
 
-  if not found then
+  if not found or (not found.novibe_md and #found.conventions == 0) then
     vim.notify(
       "novibe: no convention files found (walked up from " .. vim.fn.fnamemodify(vim.fn.getcwd(), ":~") .. ")",
       vim.log.levels.WARN
@@ -127,7 +140,6 @@ vim.api.nvim_create_user_command("NovibeConventions", function()
   local files = {}
   if found.novibe_md then table.insert(files, found.novibe_md) end
   for _, f in ipairs(found.conventions) do table.insert(files, f) end
-  for _, f in ipairs(found.learned) do table.insert(files, f) end
 
   vim.ui.select(files, {
     prompt = "novibe: open convention file",
@@ -135,4 +147,24 @@ vim.api.nvim_create_user_command("NovibeConventions", function()
   }, function(choice)
     if choice then vim.cmd("edit " .. vim.fn.fnameescape(choice)) end
   end)
-end, { desc = "novibe: browse and open convention/learned files" })
+end, { desc = "novibe: browse and open canonical convention files" })
+
+vim.api.nvim_create_user_command("NovibeLearns", function()
+  local no_vibe = require("novibe.no_vibe")
+  local found   = no_vibe.discover()
+
+  if not found or #found.learned == 0 then
+    vim.notify(
+      "novibe: no learned-*.md files yet — run :NovibeAct with #teach to start staging rules",
+      vim.log.levels.WARN
+    )
+    return
+  end
+
+  vim.ui.select(found.learned, {
+    prompt = "novibe: open learned (staged) file",
+    format_item = function(f) return vim.fn.fnamemodify(f, ":~:.") end,
+  }, function(choice)
+    if choice then vim.cmd("edit " .. vim.fn.fnameescape(choice)) end
+  end)
+end, { desc = "novibe: browse and open staged learned-*.md files" })

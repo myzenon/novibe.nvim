@@ -29,7 +29,7 @@ Optional: [snacks.nvim](https://github.com/folke/snacks.nvim) for the `<C-f>` fi
 ```lua
 {
   "myzenon/novibe.nvim",
-  cmd = { "NovibeAct", "NovibeProfile", "NovibeDistill", "NovibeReset", "NovibeStatus", "NovibeConventions" },
+  cmd = { "NovibeAct", "NovibeProfile", "NovibeDistill", "NovibePromote", "NovibeReset", "NovibeStatus", "NovibeConventions", "NovibeLearns" },
   keys = {
     { "<leader>nv", ":NovibeAct<CR>", mode = "v", desc = "novibe: fill implementation" },
   },
@@ -75,8 +75,10 @@ You can also run `:NovibeAct` with the cursor on a single line — no visual sel
 | `:NovibeProfile` | Pick the active profile (model + effort + provider) |
 | `:NovibeReset` | Start a fresh session on the next fill |
 | `:NovibeStatus` | Show profile, session, cost, ctx %, loaded rule files |
-| `:NovibeConventions` | Browse convention/learned files in a picker |
+| `:NovibeConventions` | Browse canonical `convention-*.md` files |
+| `:NovibeLearns` | Browse staged `learned-*.md` files |
 | `:NovibeDistill` | Force `#teach` distillation now |
+| `:NovibePromote` | Review mature learned rules and graduate them to conventions |
 
 ---
 
@@ -90,7 +92,9 @@ After a fill, edit the result to match your taste, re-select, run `:NovibeAct` w
 #teach named function over arrow function for exports
 ```
 
-novibe accumulates the diffs and auto-distills topic-organized rules into `.no_vibe/learned-*.md` (e.g. `learned-style.md`, `learned-react.md`). The model learns your style from real examples, not hand-written rules. See [CONFIG.md → Conventions](./CONFIG.md#conventions).
+novibe accumulates the diffs and auto-distills topic-organized rules into `.no_vibe/learned-*.md` (e.g. `learned-style.md`, `learned-react.md`). Each rule carries a support count — the more diffs that reinforce it, the higher the count. The model learns your style from real examples, not hand-written rules.
+
+Run `:NovibePromote` to review mature learned rules and graduate them into canonical `convention-*.md` files. See [CONFIG.md → Promotion](./CONFIG.md#promotion).
 
 ---
 

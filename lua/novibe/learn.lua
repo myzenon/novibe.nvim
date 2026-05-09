@@ -110,10 +110,18 @@ Each file uses NO_VIBE.md section format:
   ## always       — rule applies to every file
   ## *.tsx        — rule applies only to matching files
 
+Support count tracking (CRITICAL):
+- Every rule line MUST end with an HTML comment of the form <!-- n=N --> where N is the number of distinct diffs that support this rule.
+- When you preserve an existing rule unchanged, KEEP its existing N value.
+- When a new diff reinforces an existing rule, INCREMENT its N (e.g. n=4 -> n=5).
+- When you create a new rule from M diffs, set n=M.
+- When you merge two rules into one, sum their N values.
+- Format: `- rule text <!-- n=3 -->`
+
 Respond with ONLY a valid JSON object — no prose, no markdown fences:
 {
-  "learned-style.md": "## always\n- rule\n",
-  "learned-react.md": "## *.tsx\n- rule\n"
+  "learned-style.md": "## always\n- prefer for-loops over .map() <!-- n=5 -->\n- early return over nested if <!-- n=2 -->\n",
+  "learned-react.md": "## *.tsx\n- named function over arrow <!-- n=3 -->\n"
 }
 
 Filenames must match: learned-<topic>.md]],
