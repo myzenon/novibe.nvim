@@ -225,14 +225,8 @@ function M.fill(line1, line2)
         local has_changes = response.changes and #response.changes > 0
         local has_message = response.message and response.message ~= vim.NIL
 
-        -- apply immediately if done and no review needed
-        if response.done and has_changes and not has_message then
-          apply.apply_all(response.changes)
-          return
-        end
-
-        -- open chat float for anything needing review or follow-up
-        if has_message or has_changes then
+        -- out-of-scope changes always go through the review float — never auto-apply
+        if has_changes or has_message then
           chat.open(response, claude_bin)
         end
       end)
