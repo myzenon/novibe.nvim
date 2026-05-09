@@ -42,8 +42,11 @@ local function render(response, inner_w)
     push("")
   end
 
-  for _, change in ipairs(response.changes or {}) do
-    push("┌─ " .. change.file .. "  [" .. (change.action or "replace") .. "]", "Title")
+  local changes = response.changes or {}
+  local total = #changes
+  for i, change in ipairs(changes) do
+    local num = total > 1 and string.format("[%d/%d] ", i, total) or ""
+    push("┌─ " .. num .. change.file .. "  [" .. (change.action or "replace") .. "]", "Title")
     push("│  " .. change.description, "Comment")
     push("│")
     for _, l in ipairs(vim.split(vim.trim(change.find), "\n", { plain = true })) do
