@@ -19,16 +19,17 @@ Detailed reference for profiles, conventions, opencode integration, and `setup()
 
 ## Fresh project setup
 
-The fastest way to bootstrap conventions is to ask your AI CLI to do it. Both Claude Code and opencode work — pick whichever you prefer:
+The fastest way to bootstrap conventions is to ask your AI CLI to do it:
 
-1. Open a terminal in your project root and start the interactive CLI of your choice:
-   - **Claude Code**: `claude`, then run `/init`
-   - **opencode**: `opencode`
-2. In the CLI, paste this instruction:
-   > "Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/claude-init.md and follow the instructions."
-3. The agent analyzes your project, generates `.no_vibe/convention-project.md` in the novibe format, and (with Claude Code) writes a `CLAUDE.md` so the format auto-loads in every future session.
+**Claude Code:**
+1. Open a terminal in your project root: `claude`
+2. Paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/claude-init.md and follow the instructions."`
+3. The agent generates `.no_vibe/convention-project.md` and appends the novibe format spec to `CLAUDE.md` so it auto-loads in every future Claude Code session.
 
-> The bootstrap file is named `claude-init.md` for historical reasons but the instructions inside are CLI-agnostic — opencode reads and follows them just fine.
+**opencode:**
+1. Open a terminal in your project root: `opencode`
+2. Paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/opencode-init.md and follow the instructions."`
+3. The agent generates `.no_vibe/convention-project.md` and appends the novibe format spec to `AGENTS.md`.
 
 You can add more `convention-*.md` files later (`convention-frontend.md`, `convention-style.md`, etc.). All matching files are loaded and merged.
 

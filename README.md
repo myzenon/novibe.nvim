@@ -50,6 +50,19 @@ See **[CONFIG.md](./CONFIG.md)** for full configuration, profiles, conventions, 
 
 ---
 
+## First-time project setup
+
+Bootstrap your project conventions by running your AI CLI in the project root:
+
+- **Claude Code** — start `claude`, then paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/claude-init.md and follow the instructions."`
+- **opencode** — start `opencode`, then paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/opencode-init.md and follow the instructions."`
+
+The agent analyzes your project, generates `.no_vibe/convention-project.md`, and writes the novibe format spec into `CLAUDE.md` / `AGENTS.md` so it auto-loads in future sessions.
+
+See [CONFIG.md → Fresh project setup](./CONFIG.md#fresh-project-setup) for details.
+
+---
+
 ## Usage
 
 1. Write a skeleton — function signature + comments describing what it should do
