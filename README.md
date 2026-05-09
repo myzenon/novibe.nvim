@@ -33,7 +33,7 @@ You design the structure. You write the skeleton — function signature, comment
 ```lua
 {
   dir = "~/path/to/novibe.nvim",  -- or your GitHub path once published
-  cmd = { "NovibeAct", "NovibeProfile", "NovibeDistill" },
+  cmd = { "NovibeAct", "NovibeProfile", "NovibeDistill", "NovibeReset", "NovibeStatus", "NovibeConventions" },
   keys = {
     {
       "<leader>nv",
@@ -101,6 +101,12 @@ You can also run `:NovibeAct` with the cursor on a single line — no visual sel
 
 Run `:NovibeProfile` to open a picker and select a profile. The selected profile applies for the rest of the session. With no active profile, Claude CLI uses its own default model and effort.
 
+### Session management
+
+novibe uses `--continue` to carry context across fills in the same Neovim session, so Claude remembers earlier code it wrote. Over a long session the context window fills up and quality quietly degrades. novibe warns you after 10 fills. Run `:NovibeReset` to start a fresh conversation on the next fill.
+
+`:NovibeStatus` shows the active profile, bare mode, session fill count, and which rule files are loaded from the current working directory.
+
 ### Teaching your style
 
 After novibe fills code, edit the result to match your style. Then select the edited block, run `:NovibeAct`, and type `#teach` with a reason:
@@ -113,7 +119,7 @@ After novibe fills code, edit the result to match your style. Then select the ed
 
 Each `#teach` saves a diff of what Claude wrote vs what you changed it to. Once enough diffs accumulate (default: 1 on a fresh project, 3 after rules exist), novibe automatically distills rules into topic-organized files in `.no_vibe/` — `learned-style.md`, `learned-react.md`, etc. Rules there are injected into every future prompt — Claude learns your style from real examples, not hand-written rules.
 
-Run `:NovibeDistill` to force extraction at any time.
+Run `:NovibeDistill` to force extraction at any time. Run `:NovibeConventions` to browse and open convention/learned files in a picker.
 
 ---
 

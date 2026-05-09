@@ -44,10 +44,7 @@ local function find_lenient(norm_file, find_text)
       if file_nonblank[i + j - 1].val ~= pattern_nonblank[j] then ok = false; break end
     end
     if ok then
-      local s = file_nonblank[i].idx
-      local e = file_nonblank[i + #pattern_nonblank - 1].idx
-      while s > 1 and norm_file[s - 1] == "" do s = s - 1 end
-      return s, e
+      return file_nonblank[i].idx, file_nonblank[i + #pattern_nonblank - 1].idx
     end
   end
   return nil, nil
@@ -83,7 +80,8 @@ function M.apply(change)
   local file_lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
   local s, e = find_range(file_lines, change.find)
   if not s then
-    return false, "could not locate block in " .. change.file .. ":\n" .. change.find
+    local snippet = change.find:sub(1, 80):gsub("\n", "↵")
+    return false, "could not locate block in " .. change.file .. "\nSearched for: " .. snippet
   end
 
   local action    = change.action or "replace"

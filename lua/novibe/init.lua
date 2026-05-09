@@ -7,7 +7,11 @@ local glob    = require("novibe.glob")
 local no_vibe = require("novibe.no_vibe")
 local learn   = require("novibe.learn")
 
-M._last_fill = nil  -- { original, bufnr, start_line }
+M._last_fill      = nil    -- { original, bufnr, start_line }
+M._session_count  = 0      -- fills since last reset
+M._skip_continue  = false  -- set true by :NovibeReset; consumed on next fill
+
+local SESSION_WARN_AFTER = 10
 
 local ns = vim.api.nvim_create_namespace("novibe")
 local spinner_frames = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
@@ -166,11 +170,15 @@ function M.fill(line1, line2)
     local stop_spinner = start_spinner(bufnr, start_line, end_line)
 
     local profile = config.options.active_profile
+    local use_continue = not M._skip_continue
+    M._skip_continue = false
+
     local cmd = { claude_bin }
     if config.options.bare then table.insert(cmd, "--bare") end
     if profile and profile.model  then vim.list_extend(cmd, { "--model",  profile.model }) end
     if profile and profile.effort then vim.list_extend(cmd, { "--effort", profile.effort }) end
-    vim.list_extend(cmd, { "--continue", "--print", prompt })
+    if use_continue then table.insert(cmd, "--continue") end
+    vim.list_extend(cmd, { "--print", prompt })
 
     vim.system(
       cmd,
@@ -199,6 +207,14 @@ function M.fill(line1, line2)
           local new_lines = vim.split(vim.trim(response.code), "\n", { plain = true })
           vim.api.nvim_buf_set_lines(bufnr, start_line - 1, end_line, false, new_lines)
           M._last_fill = { original = vim.trim(response.code), bufnr = bufnr, start_line = start_line }
+        end
+
+        M._session_count = M._session_count + 1
+        if M._session_count == SESSION_WARN_AFTER then
+          vim.notify(
+            string.format("novibe: %d fills in this session — context is getting long. Run :NovibeReset to start fresh.", SESSION_WARN_AFTER),
+            vim.log.levels.WARN
+          )
         end
 
         local has_changes = response.changes and #response.changes > 0
