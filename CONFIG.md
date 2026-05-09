@@ -68,6 +68,14 @@ For **Claude**:
 
 For **opencode**: use `provider/model` format. Run `opencode models` to list everything available, e.g. `anthropic/claude-sonnet-4-5`, `openai/gpt-5`, `google/gemini-2.5-pro`.
 
+**`file_context`** — `true` injects sibling files (same directory) and parsed imports from the current buffer into the prompt as a "Project files" list. The model is instructed to only reference these paths in `changes[]`. Defaults to `false`.
+
+Recommended for cheaper / less reliable models that tend to hallucinate file paths (e.g. inventing `src/components/X.tsx` when a component is actually inline). Disable for Claude Opus / Sonnet — they generally don't need it and you save tokens.
+
+```lua
+{ label = "OC GPT-5", provider = "opencode", model = "openai/gpt-5", effort = "high", file_context = true }
+```
+
 **`effort`** — Claude maps to `--effort`, opencode maps to `--variant`:
 
 | Level | Notes |
@@ -339,8 +347,13 @@ Write skeleton → visual select → <leader>nv
                                       ↓
                     response.code → spliced into buffer
                                       ↓
+              validate change.file paths against disk
+              missing? → auto-revise once (silent retry)
+                                      ↓
                     out-of-scope changes? → side panel (right vsplit)
                     ok/yes → applied to target files
 ```
 
 The model responds in a structured JSON schema (`{code, message, changes, done}`). The plugin splices `response.code` into your buffer immediately. Any changes outside your selection (imports, type definitions, other files) are shown as a diff in a side panel on the right — you can read the in-scope fill alongside the proposed out-of-scope diffs, and confirm before anything is written.
+
+**Path validation**: Before opening the side panel, novibe checks every `change.file` exists on disk. If the model invented a path (more common with cheaper models on opencode), the plugin silently sends a corrective follow-up listing the missing paths and asking for a revision. Up to one retry. If validation still fails, the side panel opens anyway so you can react manually. Combined with `file_context = true` in your profile, hallucinated paths become rare.

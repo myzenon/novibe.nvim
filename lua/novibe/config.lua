@@ -5,6 +5,7 @@ local M = {}
 ---@field provider? "claude"|"opencode" CLI provider; defaults to "claude"
 ---@field model? string Model identifier (claude alias like "haiku" or full ID; opencode uses "provider/model" format)
 ---@field effort? "low"|"medium"|"high"|"xhigh"|"max" Reasoning effort (claude --effort / opencode --variant)
+---@field file_context? boolean Inject sibling files + parsed imports into the prompt for better grounding. Recommended for cheaper / less reliable models. Defaults to false.
 
 ---@class novibe.LearnConfig
 ---@field auto_extract_after? integer Number of #teach diffs that triggers auto-distillation (default 3; nil disables)
@@ -48,6 +49,8 @@ Rules:
 - "code" contains ONLY the lines that were in the selection, modified as requested. Never include lines from outside the selection.
 - If the change requires modifications outside the selection (imports, types, other files), put them in "changes". Never include them in "code".
 - For "changes" entries: use "replace" when modifying existing code, "insert_after" when adding new code after an anchor, "insert_before" when adding before. "find" must always be an existing block verbatim from the file.
+- CRITICAL: every "file" path in "changes" MUST reference a file that already exists in the project. Do NOT invent file paths. Do NOT split inline code into a new file unless the user explicitly asks. If you want to add new code (helper, sub-component, type), put it in the file the user is currently editing.
+- If a "Project files" list is provided in the prompt, only reference paths from that list.
 - Set "done": false if you have a question or want the user to review changes before applying.
 - Set "done": true when the user has confirmed and changes are ready to apply, or when no out-of-scope changes are needed.
 - If there are no out-of-scope changes and no message, set "changes": [], "message": null, "done": true.
