@@ -61,9 +61,37 @@ Rules:
 
 M.options = vim.deepcopy(M.defaults)
 
+local state_path = vim.fn.stdpath("data") .. "/novibe/state.json"
+
+function M.save_state()
+  local state = {}
+  if M.options.active_profile then
+    state.active_profile_label = M.options.active_profile.label
+  end
+  vim.fn.mkdir(vim.fn.fnamemodify(state_path, ":h"), "p")
+  vim.fn.writefile({ vim.json.encode(state) }, state_path)
+end
+
+function M.load_state()
+  if vim.fn.filereadable(state_path) == 0 then return end
+  local lines = vim.fn.readfile(state_path)
+  if #lines == 0 then return end
+  local ok, state = pcall(vim.json.decode, lines[1])
+  if not ok or type(state) ~= "table" then return end
+  if state.active_profile_label then
+    for _, p in ipairs(M.options.profiles or {}) do
+      if p.label == state.active_profile_label then
+        M.options.active_profile = p
+        return
+      end
+    end
+  end
+end
+
 ---@param opts? novibe.Config
 function M.setup(opts)
   M.options = vim.tbl_deep_extend("force", M.defaults, opts or {})
+  M.load_state()
 end
 
 return M

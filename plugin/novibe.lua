@@ -53,6 +53,7 @@ vim.api.nvim_create_user_command("NovibeProfile", function()
   }, function(choice)
     if choice then
       config.options.active_profile = choice
+      config.save_state()
       vim.notify("novibe: profile → " .. choice.label, vim.log.levels.INFO)
     end
   end)

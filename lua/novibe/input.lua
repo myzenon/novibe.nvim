@@ -12,7 +12,17 @@ function M.open(on_submit, opts)
   local row = math.floor((screen_h - HEIGHT - 2) / 2)
   local col = math.floor((screen_w - WIDTH - 2) / 2)
 
-  local title = opts.stats and (" novibe  " .. opts.stats .. " ") or " novibe "
+  local title_parts = {}
+  if opts.profile then
+    local p = opts.profile
+    if p.provider then table.insert(title_parts, p.provider) end
+    if p.model    then table.insert(title_parts, p.model:match("[^/]+$") or p.model) end
+    if p.effort   then table.insert(title_parts, p.effort) end
+  else
+    table.insert(title_parts, "claude · default")
+  end
+  if opts.stats then table.insert(title_parts, opts.stats) end
+  local title = " novibe  " .. table.concat(title_parts, " · ") .. " "
 
   local input_buf = vim.api.nvim_create_buf(false, true)
   -- unique name avoids collision if a prior input buffer hasn't been wiped yet

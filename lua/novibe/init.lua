@@ -407,7 +407,7 @@ function M.fill(line1, line2)
         end
       end)
     )
-  end, { stats = input_stats })
+  end, { stats = input_stats, profile = config.options.active_profile })
 end
 
 return M
