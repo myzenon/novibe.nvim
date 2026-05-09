@@ -36,9 +36,10 @@ Optional: [snacks.nvim](https://github.com/folke/snacks.nvim) for the `<C-f>` fi
   config = function()
     require("novibe").setup({
       profiles = {
-        { label = "Claude Best", provider = "claude",   model = "opus",                            effort = "max"  },
-        { label = "OC Sonnet",   provider = "opencode", model = "anthropic/claude-sonnet-4-5",     effort = "high" },
-        -- See CONFIG.md for the full list of options
+        { label = "Claude Best",  provider = "claude",   model = "opus",                       effort = "max"  },
+        { label = "OC DeepSeek",  provider = "opencode", model = "opencode-go/deepseek-v4-pro", effort = "high", file_context = true },
+        { label = "OC Qwen",      provider = "opencode", model = "opencode-go/qwen3.6-plus",    effort = "high", file_context = true },
+        -- Run `opencode models` to see everything available. See CONFIG.md for full options.
       },
     })
   end,
