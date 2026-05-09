@@ -105,7 +105,32 @@ Run `:NovibeProfile` to open a picker and select a profile. The selected profile
 
 novibe uses `--continue` to carry context across fills in the same Neovim session, so Claude remembers earlier code it wrote. Over a long session the context window fills up and quality quietly degrades. novibe warns you after 10 fills. Run `:NovibeReset` to start a fresh conversation on the next fill.
 
-`:NovibeStatus` shows the active profile, bare mode, session fill count, and which rule files are loaded from the current working directory.
+`:NovibeStatus` shows the active profile, bare mode, session fill count, cumulative session cost, context window usage (%), and which rule files are loaded from the current working directory.
+
+### Usage stats
+
+After each fill, cost and context window usage are shown in two places automatically — no extra config needed:
+
+- **Input dialog title** — shows the previous fill's cost and context % when you open the prompt for the next fill
+- **Chat side panel winbar** — updates with cost and context % after each follow-up response
+
+```
+╭── novibe  $0.0039 · ctx 6% ───╮   ← previous fill stats
+│                                │
+╰─ :w submit · q cancel · <C-f> ╯
+```
+
+**Context %** is the most useful signal: it shows how full the `--continue` session context is. As it climbs (30–40%+), quality can degrade — run `:NovibeReset` to start fresh.
+
+**Optional lualine integration** — to keep stats always visible in the statusline:
+
+```lua
+-- in your lualine setup
+lualine_x = {
+  { require("novibe").statusline },
+  -- ... your other components
+}
+```
 
 ### Teaching your style
 

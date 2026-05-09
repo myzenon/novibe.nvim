@@ -208,7 +208,18 @@ function M.open(initial_response, claude_bin)
           return
         end
 
-        local response = util.parse_claude_output(result.stdout)
+        local response, usage = util.parse_claude_output(result.stdout)
+
+        if usage then
+          local parts = {}
+          if usage.cost_usd then table.insert(parts, string.format("$%.4f", usage.cost_usd)) end
+          if usage.input_tokens and usage.context_window and usage.context_window > 0 then
+            table.insert(parts, string.format("ctx %d%%", math.floor(usage.input_tokens / usage.context_window * 100)))
+          end
+          if #parts > 0 then
+            set_winbar("%#Title# novibe %#Normal#  " .. table.concat(parts, " · ") .. "  ·  :w send  ·  q quit")
+          end
+        end
 
         if response.changes and #response.changes > 0 then
           pending_changes = response.changes

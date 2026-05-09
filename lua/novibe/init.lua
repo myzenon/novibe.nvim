@@ -139,6 +139,17 @@ function M.fill(line1, line2)
   local ctx_before = vim.api.nvim_buf_get_lines(bufnr, math.max(0, start_line - 11), start_line - 1, false)
   local ctx_after  = vim.api.nvim_buf_get_lines(bufnr, end_line, math.min(total, end_line + 10), false)
 
+  local input_stats
+  if M._last_usage then
+    local u = M._last_usage
+    local parts = {}
+    if u.cost_usd then table.insert(parts, string.format("$%.4f", u.cost_usd)) end
+    if u.input_tokens and u.context_window and u.context_window > 0 then
+      table.insert(parts, string.format("ctx %d%%", math.floor(u.input_tokens / u.context_window * 100)))
+    end
+    if #parts > 0 then input_stats = table.concat(parts, " · ") end
+  end
+
   input.open(function(user_prompt)
     if user_prompt == nil then return end
 
@@ -253,7 +264,7 @@ function M.fill(line1, line2)
         end
       end)
     )
-  end)
+  end, { stats = input_stats })
 end
 
 return M

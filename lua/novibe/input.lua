@@ -3,13 +3,16 @@ local M = {}
 local WIDTH = 52
 local HEIGHT = 4
 
-function M.open(on_submit)
+function M.open(on_submit, opts)
+  opts = opts or {}
   local ui = vim.api.nvim_list_uis()[1]
   local screen_h = ui and ui.height or 40
   local screen_w = ui and ui.width or 120
 
   local row = math.floor((screen_h - HEIGHT - 2) / 2)
   local col = math.floor((screen_w - WIDTH - 2) / 2)
+
+  local title = opts.stats and (" novibe  " .. opts.stats .. " ") or " novibe "
 
   local input_buf = vim.api.nvim_create_buf(false, true)
   -- unique name avoids collision if a prior input buffer hasn't been wiped yet
@@ -26,7 +29,7 @@ function M.open(on_submit)
     height = HEIGHT,
     style = "minimal",
     border = "rounded",
-    title = " novibe ",
+    title = title,
     title_pos = "center",
     footer = " :w submit  ·  q cancel  ·  <C-f> files ",
     footer_pos = "center",
