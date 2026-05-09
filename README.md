@@ -31,7 +31,7 @@ Optional: [snacks.nvim](https://github.com/folke/snacks.nvim) for the `<C-f>` fi
   "myzenon/novibe.nvim",
   cmd = { "NovibeAct", "NovibeProfile", "NovibeDistill", "NovibePromote", "NovibeReset", "NovibeStatus", "NovibeConventions", "NovibeLearns" },
   keys = {
-    { "<leader>nv", ":NovibeAct<CR>", mode = "v", desc = "novibe: fill implementation" },
+    { "<leader>aa", ":NovibeAct<CR>", mode = "v", desc = "novibe: fill implementation" },
   },
   config = function()
     require("novibe").setup({
@@ -67,7 +67,7 @@ See [CONFIG.md → Fresh project setup](./CONFIG.md#fresh-project-setup) for det
 
 1. Write a skeleton — function signature + comments describing what it should do
 2. Visually select the block (`V` then move, or `vi{` etc.)
-3. Press `<leader>nv` (or run `:'<,'>NovibeAct`)
+3. Press `<leader>aa` (or run `:'<,'>NovibeAct`)
 4. Type an optional short instruction in the floating input → `:w` to submit
 5. Implementation is spliced in place
 

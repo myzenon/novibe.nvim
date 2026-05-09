@@ -350,7 +350,7 @@ The component returns `" $0.0039 · ctx 6%"` after a fill, or empty string when 
 ## How it works
 
 ```
-Write skeleton → visual select → <leader>nv
+Write skeleton → visual select → <leader>aa
                                       ↓
                               floating input prompt
                                       ↓ :w
