@@ -194,18 +194,17 @@ function M.open(initial_response, claude_bin)
           response = { message = raw, changes = {}, done = false }
         end
 
-        -- update pending changes if new ones arrived
+        -- keep pending_changes up to date for local confirm ("ok/yes")
         if response.changes and #response.changes > 0 then
           pending_changes = response.changes
         end
 
-        if response.done and #pending_changes > 0 then
-          apply.apply_all(pending_changes)
-          close()
-          return
-        end
-
         if response.done then
+          -- only apply what Claude explicitly returned in this turn
+          -- never apply stale pending_changes from a previous proposal
+          if response.changes and #response.changes > 0 then
+            apply.apply_all(response.changes)
+          end
           close()
           return
         end
