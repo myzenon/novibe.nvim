@@ -9,14 +9,15 @@ end, { range = true, desc = "novibe: act on selection — fill, ask, or #teach" 
 
 vim.api.nvim_create_user_command("NovibeDistill", function()
   local novibe = require("novibe")
-  local config  = require("novibe.config")
-  local learn   = require("novibe.learn")
-  local claude_bin = novibe._find_claude and novibe._find_claude()
-  if not claude_bin then
-    vim.notify("novibe: claude binary not found", vim.log.levels.ERROR)
+  local config = require("novibe.config")
+  local learn  = require("novibe.learn")
+  local provider = novibe.active_provider()
+  local bin = provider.find_bin()
+  if not bin then
+    vim.notify("novibe: " .. provider.name .. " binary not found", vim.log.levels.ERROR)
     return
   end
-  learn.extract(claude_bin, config.options.active_profile)
+  learn.extract(provider, bin, config.options.active_profile)
 end, { desc = "novibe: distill accumulated diffs into learned.md" })
 
 vim.api.nvim_create_user_command("NovibeProfile", function()
@@ -46,10 +47,11 @@ end, { desc = "novibe: pick profile (model + effort)" })
 
 vim.api.nvim_create_user_command("NovibeReset", function()
   local novibe = require("novibe")
-  novibe._skip_continue = true
-  novibe._session_count = 0
+  novibe._skip_continue       = true
+  novibe._session_count       = 0
+  novibe._opencode_session_id = nil
   vim.notify("novibe: session reset — next fill starts a fresh conversation", vim.log.levels.INFO)
-end, { desc = "novibe: reset claude session (next fill starts fresh)" })
+end, { desc = "novibe: reset session (next fill starts fresh)" })
 
 vim.api.nvim_create_user_command("NovibeStatus", function()
   local config  = require("novibe.config")
@@ -60,10 +62,12 @@ vim.api.nvim_create_user_command("NovibeStatus", function()
 
   local profile = config.options.active_profile
   if profile then
+    local prov = profile.provider or "claude"
+    local effort = profile.effort and (", effort=" .. profile.effort) or ""
     table.insert(lines, "Profile:  " .. profile.label
-      .. " (" .. profile.model .. ", effort=" .. profile.effort .. ")")
+      .. " [" .. prov .. "] (" .. (profile.model or "?") .. effort .. ")")
   else
-    table.insert(lines, "Profile:  none (CLI defaults)")
+    table.insert(lines, "Profile:  none (claude CLI defaults)")
   end
 
   table.insert(lines, "Bare:     " .. (config.options.bare and "on" or "off"))

@@ -47,7 +47,7 @@ local function effective_threshold(configured)
   return has_learned_rules() and configured or 1
 end
 
-function M.teach(original, current, reason, filename, claude_bin, auto_after, profile)
+function M.teach(original, current, reason, filename, provider, bin, auto_after, profile)
   if original == current then
     vim.notify("novibe: no changes detected — nothing to teach", vim.log.levels.WARN)
     return
@@ -74,11 +74,11 @@ function M.teach(original, current, reason, filename, claude_bin, auto_after, pr
       string.format("novibe: %d diff(s) reached threshold — distilling…", #diffs),
       vim.log.levels.INFO
     )
-    M.extract(claude_bin, profile)
+    M.extract(provider, bin, profile)
   end
 end
 
-function M.extract(claude_bin, profile)
+function M.extract(provider, bin, profile)
   local diffs = load_diffs()
   if #diffs == 0 then
     vim.notify("novibe: no accumulated diffs to distill", vim.log.levels.WARN)
@@ -141,9 +141,12 @@ Filenames must match: learned-<topic>.md]],
   end
 
   local prompt = table.concat(parts, "\n")
-  local cmd = { claude_bin, "--print", prompt }
-  if profile and profile.model  then vim.list_extend(cmd, { "--model",  profile.model }) end
-  if profile and profile.effort then vim.list_extend(cmd, { "--effort", profile.effort }) end
+  local cmd = provider.build_cmd(bin, prompt, {
+    profile      = profile,
+    bare         = false,
+    use_continue = false,
+    session_id   = nil,
+  })
 
   vim.system(cmd, { text = true }, vim.schedule_wrap(function(result)
     if result.code ~= 0 or vim.trim(result.stdout or "") == "" then
@@ -151,12 +154,12 @@ Filenames must match: learned-<topic>.md]],
       return
     end
 
-    local raw = vim.trim(result.stdout)
-    raw = raw:gsub("^```json%s*", ""):gsub("^```%s*", ""):gsub("%s*```$", "")
-
-    local ok, files = pcall(vim.json.decode, raw)
-    if not ok then
-      vim.notify("novibe: distill response parse failed — " .. tostring(files), vim.log.levels.ERROR)
+    -- distill prompt asks for a JSON filename→content map (not the novibe schema).
+    -- The provider parser parses the inner JSON; for a filename map response it
+    -- returns that map directly as the "response" table.
+    local files = provider.parse_output(result.stdout)
+    if type(files) ~= "table" then
+      vim.notify("novibe: distill response parse failed", vim.log.levels.ERROR)
       return
     end
 

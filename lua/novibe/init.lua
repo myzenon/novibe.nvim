@@ -1,18 +1,19 @@
 local M = {}
-local config  = require("novibe.config")
-local input   = require("novibe.input")
-local chat    = require("novibe.chat")
-local apply   = require("novibe.apply")
-local glob    = require("novibe.glob")
-local no_vibe = require("novibe.no_vibe")
-local learn   = require("novibe.learn")
-local util    = require("novibe.util")
+local config    = require("novibe.config")
+local input     = require("novibe.input")
+local chat      = require("novibe.chat")
+local apply     = require("novibe.apply")
+local glob      = require("novibe.glob")
+local no_vibe   = require("novibe.no_vibe")
+local learn     = require("novibe.learn")
+local providers = require("novibe.providers")
 
-M._last_fill      = nil    -- { original, bufnr, start_line }
-M._session_count  = 0      -- fills since last reset
-M._skip_continue  = false  -- set true by :NovibeReset; consumed on next fill
-M._session_cost   = 0.0    -- cumulative USD this Neovim session
-M._last_usage     = nil    -- usage table from most recent fill
+M._last_fill            = nil    -- { original, bufnr, start_line }
+M._session_count        = 0      -- fills since last reset
+M._skip_continue        = false  -- set true by :NovibeReset; consumed on next fill
+M._session_cost         = 0.0    -- cumulative USD this Neovim session
+M._last_usage           = nil    -- usage table from most recent fill
+M._opencode_session_id  = nil    -- captured from opencode response, reused for next fill
 
 local SESSION_WARN_AFTER = 10
 
@@ -41,19 +42,10 @@ local function random_loading_msg()
 end
 
 
-local function find_claude()
-  local found = vim.fn.exepath("claude")
-  if found ~= "" then return found end
-  for _, path in ipairs({
-    vim.fn.expand("~/.local/bin/claude"),
-    "/usr/local/bin/claude",
-    "/opt/homebrew/bin/claude",
-  }) do
-    if vim.fn.filereadable(path) == 1 then return path end
-  end
-  return nil
+function M.active_provider()
+  local profile = config.options.active_profile
+  return providers.get(profile and profile.provider)
 end
-M._find_claude = find_claude
 
 local function start_spinner(bufnr, start_line, end_line)
   local frame = 1
@@ -113,9 +105,10 @@ function M.setup(opts)
 end
 
 function M.fill(line1, line2)
-  local claude_bin = find_claude()
-  if not claude_bin then
-    vim.notify("novibe: claude binary not found", vim.log.levels.ERROR)
+  local provider = M.active_provider()
+  local bin = provider.find_bin()
+  if not bin then
+    vim.notify("novibe: " .. provider.name .. " binary not found", vim.log.levels.ERROR)
     return
   end
 
@@ -172,7 +165,8 @@ function M.fill(line1, line2)
         current,
         reason,
         vim.api.nvim_buf_get_name(bufnr),
-        claude_bin,
+        provider,
+        bin,
         config.options.learn and config.options.learn.auto_extract_after,
         config.options.active_profile
       )
@@ -207,15 +201,15 @@ function M.fill(line1, line2)
     local stop_spinner = start_spinner(bufnr, start_line, end_line)
 
     local profile = config.options.active_profile
-    local use_continue = not M._skip_continue
+    local carry = not M._skip_continue
     M._skip_continue = false
 
-    local cmd = { claude_bin }
-    if config.options.bare then table.insert(cmd, "--bare") end
-    if profile and profile.model  then vim.list_extend(cmd, { "--model",  profile.model }) end
-    if profile and profile.effort then vim.list_extend(cmd, { "--effort", profile.effort }) end
-    if use_continue then table.insert(cmd, "--continue") end
-    vim.list_extend(cmd, { "--output-format", "json", "--print", prompt })
+    local cmd = provider.build_cmd(bin, prompt, {
+      profile      = profile,
+      bare         = config.options.bare,
+      use_continue = carry,
+      session_id   = carry and M._opencode_session_id or nil,
+    })
 
     vim.system(
       cmd,
@@ -231,7 +225,10 @@ function M.fill(line1, line2)
           return
         end
 
-        local response, usage = util.parse_claude_output(result.stdout)
+        local response, usage = provider.parse_output(result.stdout)
+        if usage and usage.session_id then
+          M._opencode_session_id = usage.session_id
+        end
 
         -- splice the code replacement
         if response.code and response.code ~= vim.NIL then
@@ -260,7 +257,11 @@ function M.fill(line1, line2)
 
         -- out-of-scope changes always go through the review float — never auto-apply
         if has_changes or has_message then
-          chat.open(response, claude_bin)
+          chat.open(response, {
+            bin        = bin,
+            provider   = provider,
+            session_id = M._opencode_session_id,
+          })
         end
       end)
     )

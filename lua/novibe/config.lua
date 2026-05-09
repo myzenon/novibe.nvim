@@ -1,5 +1,21 @@
 local M = {}
 
+---@class novibe.Profile
+---@field label string Display name shown in :NovibeProfile picker
+---@field provider? "claude"|"opencode" CLI provider; defaults to "claude"
+---@field model? string Model identifier (claude alias like "haiku" or full ID; opencode uses "provider/model" format)
+---@field effort? "low"|"medium"|"high"|"xhigh"|"max" Reasoning effort (claude --effort / opencode --variant)
+
+---@class novibe.LearnConfig
+---@field auto_extract_after? integer Number of #teach diffs that triggers auto-distillation (default 3; nil disables)
+
+---@class novibe.Config
+---@field bare? boolean Use --bare flag (claude only; requires ANTHROPIC_API_KEY auth)
+---@field profiles? novibe.Profile[] Profiles selectable via :NovibeProfile
+---@field learn? novibe.LearnConfig
+---@field system_prompt? string Override default system prompt
+---@field keymap? string Visual-mode keymap for :NovibeAct (defaults to none — bind via lazy.nvim keys spec)
+
 M.defaults = {
   keymap = nil,
   bare = false,  -- set true only if you auth via ANTHROPIC_API_KEY, not claude login
@@ -42,6 +58,7 @@ Rules:
 
 M.options = vim.deepcopy(M.defaults)
 
+---@param opts? novibe.Config
 function M.setup(opts)
   M.options = vim.tbl_deep_extend("force", M.defaults, opts or {})
 end

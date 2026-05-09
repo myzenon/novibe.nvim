@@ -19,7 +19,7 @@ You design the structure. You write the skeleton — function signature, comment
 ## Requirements
 
 - Neovim 0.10+
-- [Claude Code CLI](https://claude.ai/code) installed and authenticated (`claude login`)
+- One of: [Claude Code CLI](https://claude.ai/code) (`claude login`) or [opencode](https://opencode.ai/) (`opencode auth login`)
 - Any Neovim config with [lazy.nvim](https://github.com/folke/lazy.nvim)
 
 **Optional:** [snacks.nvim](https://github.com/folke/snacks.nvim) — enables the `<C-f>` file picker in the input float (handles paths with special characters like `()`). Falls back to Neovim's built-in `<C-x><C-f>` filename completion if not available. Ships with LazyVim by default.
@@ -150,19 +150,28 @@ Run `:NovibeDistill` to force extraction at any time. Run `:NovibeConventions` t
 
 ## Profiles
 
-Profiles combine a model and an effort level into a named preset. You define them yourself — there are no built-in defaults.
+Profiles combine a provider, model, and effort level into a named preset. You define them yourself — there are no built-in defaults. You can mix providers freely.
 
 ```lua
 require("novibe").setup({
   profiles = {
-    { label = "Fast",     model = "claude-haiku-4-5-20251001", effort = "low" },
-    { label = "Balanced", model = "claude-sonnet-4-6",         effort = "medium" },
-    { label = "Best",     model = "claude-opus-4-7",           effort = "max" },
+    -- Claude Code CLI
+    { label = "Fast",     provider = "claude", model = "claude-haiku-4-5-20251001", effort = "low" },
+    { label = "Balanced", provider = "claude", model = "claude-sonnet-4-6",         effort = "medium" },
+    { label = "Best",     provider = "claude", model = "claude-opus-4-7",           effort = "max" },
+
+    -- opencode (model uses "provider/model" format; effort maps to --variant)
+    { label = "OC Sonnet", provider = "opencode", model = "anthropic/claude-sonnet-4-5", effort = "high" },
+    { label = "OC GPT-5",  provider = "opencode", model = "openai/gpt-5",                effort = "medium" },
   },
 })
 ```
 
-**`model`** — full model ID or alias accepted by the Claude CLI:
+**`provider`** — `"claude"` (default if omitted) or `"opencode"`. Switching profiles via `:NovibeProfile` switches everything atomically. LazyVim with lua-language-server gives autocomplete on this field, so you won't mistype.
+
+**`model`** — full model ID or alias accepted by the active provider's CLI:
+
+For **Claude**:
 
 | Alias | Full ID |
 |---|---|
@@ -170,7 +179,9 @@ require("novibe").setup({
 | `sonnet` | `claude-sonnet-4-6` |
 | `opus` | `claude-opus-4-7` |
 
-**`effort`** — maps directly to Claude CLI's `--effort` flag. Five levels along a speed ↔ intelligence trade-off:
+For **opencode**: use `provider/model` format. Run `opencode models` to list everything available, e.g. `anthropic/claude-sonnet-4-5`, `openai/gpt-5`, `google/gemini-2.5-pro`.
+
+**`effort`** — Claude maps to `--effort`, opencode maps to `--variant`. Five levels along a speed ↔ intelligence trade-off:
 
 | Level | Notes |
 |---|---|
@@ -180,9 +191,16 @@ require("novibe").setup({
 | `xhigh` | Deeper reasoning — **Opus 4.7 only** |
 | `max` | Maximum reasoning |
 
-> The Claude CLI documents `xhigh` as Opus-only. Other levels may also have model restrictions — check `/effort` inside an interactive `claude` session to see which levels are available for the model you've selected.
+> The Claude CLI documents `xhigh` as Opus-only. Other levels may also have model restrictions — check `/effort` inside an interactive `claude` session to see which levels are available for the model you've selected. opencode's `--variant` accepts the same level names but support depends on the model.
 
-Profiles are entirely yours to define. Add as many as you need, name them however you like, and mix model/effort freely.
+Profiles are entirely yours to define. Add as many as you need, name them however you like, and mix provider/model/effort freely.
+
+### opencode notes
+
+- **Sessions**: novibe captures the `sessionID` from opencode's first response and reuses it via `--session ID` for follow-up fills, mirroring Claude's `--continue` behavior. `:NovibeReset` clears it.
+- **`bare` mode**: silently ignored on opencode (it's a Claude-specific flag).
+- **Context window %**: not shown for opencode (the CLI doesn't expose it). Cost and token counts still display.
+- **Tools/agents**: opencode's default `build` agent has tool access. novibe's strict JSON system prompt usually keeps the model from invoking tools, but if you see file edits happening outside novibe's review flow, configure a no-tools agent in opencode and reference it via `opencode agent` settings.
 
 ---
 

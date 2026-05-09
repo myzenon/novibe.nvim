@@ -1,5 +1,4 @@
 local apply = require("novibe.apply")
-local util  = require("novibe.util")
 
 local M = {}
 
@@ -82,7 +81,10 @@ end
 
 local TITLE_IDLE = "%#Title# novibe %#Normal#  ·  :w send  ·  q quit"
 
-function M.open(initial_response, claude_bin)
+function M.open(initial_response, opts)
+  local bin        = opts.bin
+  local provider   = opts.provider
+  local session_id = opts.session_id
   -- store changes so confirmations can apply locally without a round-trip
   local pending_changes = initial_response.changes or {}
 
@@ -193,8 +195,15 @@ function M.open(initial_response, claude_bin)
     local reminder = schema_reminder(pending_changes)
     local msg = reply ~= "" and (reply .. reminder) or ("continue" .. reminder)
 
+    local cmd = provider.build_cmd(bin, msg, {
+      profile      = nil,           -- follow-ups inherit the original session's model/effort
+      bare         = false,
+      use_continue = true,          -- claude: --continue
+      session_id   = session_id,    -- opencode: --session ID
+    })
+
     vim.system(
-      { claude_bin, "--continue", "--output-format", "json", "--print", msg },
+      cmd,
       { text = true },
       vim.schedule_wrap(function(result)
         stop()
@@ -208,7 +217,8 @@ function M.open(initial_response, claude_bin)
           return
         end
 
-        local response, usage = util.parse_claude_output(result.stdout)
+        local response, usage = provider.parse_output(result.stdout)
+        if usage and usage.session_id then session_id = usage.session_id end
 
         if usage then
           local parts = {}
