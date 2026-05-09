@@ -1,12 +1,12 @@
 # novibe.nvim
 
-> *"No vibe, just smart auto completion."*
+> _"No vibe, just smart auto completion."_
 
 A minimal Neovim plugin that uses your AI coding CLI ([Claude Code](https://claude.ai/code) or [opencode](https://opencode.ai/)) as a **code fulfillment tool, not a vibe coder**.
 
 You design the structure. You write the skeleton — function signature, comments describing intent and algorithm. The model fills the implementation within your boundaries. You already understand the code because you designed it.
 
-**This is not vibe coding.** Vibe coding (Andrej Karpathy) is when you stop understanding the code — you describe, AI generates, you accept without reading. `novibe.nvim` requires *more* thinking upfront, not less.
+**This is not vibe coding.** Vibe coding (Andrej Karpathy) is when you stop understanding the code — you describe, AI generates, you accept without reading. `novibe.nvim` requires _more_ thinking upfront, not less.
 
 > **Irony disclosure:** this plugin was itself written by vibe coding. The author described, an AI agent generated, the author accepted without fully reading. Do as I say, not as I do.
 
@@ -37,7 +37,7 @@ Optional: [snacks.nvim](https://github.com/folke/snacks.nvim) for the `<C-f>` fi
     require("novibe").setup({
       profiles = {
         { label = "Claude Best",  provider = "claude",   model = "opus",                       effort = "max"  },
-        { label = "OC DeepSeek",  provider = "opencode", model = "opencode-go/deepseek-v4-pro", effort = "high", file_context = true },
+        { label = "OC DeepSeek",  provider = "opencode", model = "opencode-go/deepseek-v4-pro", effort = "high", file_context = false },
         { label = "OC Qwen",      provider = "opencode", model = "opencode-go/qwen3.6-plus",    effort = "high", file_context = true },
         -- Run `opencode models` to see everything available. See CONFIG.md for full options.
       },
@@ -63,6 +63,7 @@ You can also run `:NovibeAct` with the cursor on a single line — no visual sel
 **Input float:** `:w` submit · `<Esc>`/`q` cancel · `<C-f>` file picker (insert mode)
 
 **Out-of-scope changes** (imports, types, other files) open a side panel showing diffs:
+
 - `ok` / `yes` / `lgtm` + `:w` — apply all
 - Free-form text + `:w` — request revision from the model
 - `q` — discard
@@ -71,16 +72,16 @@ You can also run `:NovibeAct` with the cursor on a single line — no visual sel
 
 ## Commands
 
-| Command | What |
-|---|---|
-| `:NovibeAct` | Fill selection (or current line) |
-| `:NovibeProfile` | Pick the active profile (model + effort + provider) |
-| `:NovibeReset` | Start a fresh session on the next fill |
-| `:NovibeStatus` | Show profile, session, cost, ctx %, loaded rule files |
-| `:NovibeConventions` | Browse canonical `convention-*.md` files |
-| `:NovibeLearns` | Browse staged `learned-*.md` files |
-| `:NovibeDistill` | Force `#teach` distillation now |
-| `:NovibePromote` | Review mature learned rules and graduate them to conventions |
+| Command              | What                                                         |
+| -------------------- | ------------------------------------------------------------ |
+| `:NovibeAct`         | Fill selection (or current line)                             |
+| `:NovibeProfile`     | Pick the active profile (model + effort + provider)          |
+| `:NovibeReset`       | Start a fresh session on the next fill                       |
+| `:NovibeStatus`      | Show profile, session, cost, ctx %, loaded rule files        |
+| `:NovibeConventions` | Browse canonical `convention-*.md` files                     |
+| `:NovibeLearns`      | Browse staged `learned-*.md` files                           |
+| `:NovibeDistill`     | Force `#teach` distillation now                              |
+| `:NovibePromote`     | Review mature learned rules and graduate them to conventions |
 
 ---
 
