@@ -102,9 +102,14 @@ function M.fill(line1, line2)
     return
   end
 
-  vim.api.nvim_feedkeys(
-    vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "x", false
-  )
+  -- only exit visual mode (to flush '<,'> marks) when called from a keymap
+  -- with no explicit range; when line1/line2 are provided the marks aren't needed
+  -- and a stray Esc in the typeahead would fire inside the input float
+  if line1 == nil or line2 == nil then
+    vim.api.nvim_feedkeys(
+      vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "x", false
+    )
+  end
 
   local bufnr      = vim.api.nvim_get_current_buf()
   local start_line = line1 or vim.fn.getpos("'<")[2]
