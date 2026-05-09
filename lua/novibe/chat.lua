@@ -2,8 +2,6 @@ local apply = require("novibe.apply")
 
 local M = {}
 
-local WIDTH  = 82
-local HEIGHT = 26
 local MARKER = "── reply ──────────────────────────────────────────────────────────────────────"
 
 local spinner_frames = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
@@ -18,27 +16,16 @@ local function is_confirm(text)
   return CONFIRM[vim.trim(text):lower()] ~= nil
 end
 
-local function center_cfg(h)
-  local ui = vim.api.nvim_list_uis()[1]
-  local sh = ui and ui.height or 40
-  local sw = ui and ui.width  or 120
-  return {
-    relative  = "editor",
-    row       = math.floor((sh - h - 2) / 2),
-    col       = math.floor((sw - WIDTH - 2) / 2),
-    width     = WIDTH,
-    height    = h,
-    style     = "minimal",
-    border    = "rounded",
-    title     = " novibe: follow-up ",
-    title_pos = "center",
-    footer    = " :w send  ·  q quit ",
-    footer_pos = "center",
-  }
+local function split_width()
+  -- 40% of editor width, clamped to a comfortable reading range
+  return math.min(math.max(math.floor(vim.o.columns * 0.4), 50), 90)
 end
 
--- Build lines + highlight specs [{line (0-based), hl}] for the read-only section
-local function render(response)
+-- Build lines + highlight specs [{line (0-based), hl}] for the read-only section.
+-- `inner_w` is the visible width of the chat window; the diff block's closing
+-- rule is drawn to fit so it doesn't wrap awkwardly in narrow splits.
+local function render(response, inner_w)
+  inner_w = math.max(inner_w or 60, 20)
   local lines = {}
   local hls   = {}
 
@@ -64,7 +51,7 @@ local function render(response)
     for _, l in ipairs(vim.split(vim.trim(change.replace), "\n", { plain = true })) do
       push("  + " .. l, "DiffAdd")
     end
-    push("└" .. string.rep("─", WIDTH - 2), "Comment")
+    push("└" .. string.rep("─", inner_w - 2), "Comment")
     push("")
   end
 
@@ -82,23 +69,46 @@ local function schema_reminder()
   return '\n\n[Respond ONLY in JSON: {"message":...,"changes":[...],"done":true/false}]'
 end
 
+local TITLE_IDLE = "%#Title# novibe %#Normal#  ·  :w send  ·  q quit"
+
 function M.open(initial_response, claude_bin)
   -- store changes so confirmations can apply locally without a round-trip
   local pending_changes = initial_response.changes or {}
 
   local ns  = vim.api.nvim_create_namespace("novibe_chat")
   local buf = vim.api.nvim_create_buf(false, true)
-  -- unique name per instance avoids "buffer name already in use" if a prior
-  -- chat buffer hasn't been wiped yet (rapid double-invocation)
   pcall(vim.api.nvim_buf_set_name, buf, "novibe://chat/" .. vim.uv.hrtime())
   vim.bo[buf].buftype   = "acwrite"
   vim.bo[buf].bufhidden = "wipe"
+  vim.bo[buf].swapfile  = false
 
-  local response_lines, hls = render(initial_response)
-  local init_h = math.min(math.max(#response_lines + 6, 12), 30)
-  local win = vim.api.nvim_open_win(buf, true, center_cfg(init_h))
-  vim.wo[win].wrap      = true
-  vim.wo[win].linebreak = true
+  -- open as a right-side vertical split so the in-scope code stays visible
+  vim.cmd("botright vsplit")
+  local win = vim.api.nvim_get_current_win()
+  vim.api.nvim_win_set_buf(win, buf)
+  vim.api.nvim_win_set_width(win, split_width())
+
+  vim.wo[win].wrap       = true
+  vim.wo[win].linebreak  = true
+  vim.wo[win].number     = false
+  vim.wo[win].signcolumn = "no"
+  vim.wo[win].cursorline = false
+  vim.wo[win].winfixwidth = true
+
+  local function set_winbar(text)
+    if vim.api.nvim_win_is_valid(win) then
+      vim.wo[win].winbar = text
+    end
+  end
+
+  set_winbar(TITLE_IDLE)
+
+  local function inner_width()
+    if vim.api.nvim_win_is_valid(win) then
+      return vim.api.nvim_win_get_width(win) - 2
+    end
+    return 60
+  end
 
   local done = false
 
@@ -108,20 +118,24 @@ function M.open(initial_response, claude_bin)
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, content)
     apply_hls(ns, buf, r_hls)
 
-    -- focus the chat window before startinsert; otherwise insert mode would
-    -- activate in whatever window the user clicked over to during the spinner
     if vim.api.nvim_win_is_valid(win) then
-      vim.api.nvim_set_current_win(win)
       vim.api.nvim_win_set_cursor(win, { #content, 0 })
-      vim.cmd("startinsert")
+      -- only enter insert mode if chat is focused; don't yank focus from the
+      -- code window the user might be reading
+      if vim.api.nvim_get_current_win() == win then
+        vim.cmd("startinsert")
+      end
     end
   end
 
+  local response_lines, hls = render(initial_response, inner_width())
   set_content(response_lines, hls)
 
   local function close()
     done = true
-    vim.cmd("stopinsert")
+    if vim.api.nvim_get_current_win() == win then
+      vim.cmd("stopinsert")
+    end
     if vim.api.nvim_win_is_valid(win) then
       vim.api.nvim_win_close(win, true)
     end
@@ -129,7 +143,6 @@ function M.open(initial_response, claude_bin)
 
   local function extract_reply()
     local all = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-    -- find marker scanning from bottom
     for i = #all, 1, -1 do
       if all[i] == MARKER then
         local reply_lines = vim.list_slice(all, i + 1)
@@ -145,16 +158,11 @@ function M.open(initial_response, claude_bin)
     timer:start(80, 80, vim.schedule_wrap(function()
       if not vim.api.nvim_win_is_valid(win) then timer:stop(); timer:close(); return end
       frame = (frame % #spinner_frames) + 1
-      vim.api.nvim_win_set_config(win, {
-        footer = " " .. spinner_frames[frame] .. " thinking…  ·  q quit ",
-        footer_pos = "center",
-      })
+      set_winbar("%#Title# novibe %#Normal#  ·  " .. spinner_frames[frame] .. " thinking…  ·  q quit")
     end))
     return function()
       timer:stop(); timer:close()
-      if vim.api.nvim_win_is_valid(win) then
-        vim.api.nvim_win_set_config(win, { footer = " :w send  ·  q quit ", footer_pos = "center" })
-      end
+      set_winbar(TITLE_IDLE)
     end
   end
 
@@ -194,14 +202,11 @@ function M.open(initial_response, claude_bin)
           response = { message = raw, changes = {}, done = false }
         end
 
-        -- keep pending_changes up to date for local confirm ("ok/yes")
         if response.changes and #response.changes > 0 then
           pending_changes = response.changes
         end
 
         if response.done then
-          -- only apply what Claude explicitly returned in this turn
-          -- never apply stale pending_changes from a previous proposal
           if response.changes and #response.changes > 0 then
             apply.apply_all(response.changes)
           end
@@ -209,7 +214,7 @@ function M.open(initial_response, claude_bin)
           return
         end
 
-        local new_lines, new_hls = render(response)
+        local new_lines, new_hls = render(response, inner_width())
         set_content(new_lines, new_hls)
       end)
     )

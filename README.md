@@ -92,7 +92,7 @@ You can also run `:NovibeAct` with the cursor on a single line — no visual sel
 - `<Esc>` (in normal mode) or `q` — cancel
 - `<C-f>` (insert mode) — file picker to insert a path at cursor
 
-**If Claude needs to change something outside your selection** (imports, types, other files), a follow-up float opens showing the proposed changes as a diff. Review, then:
+**If Claude needs to change something outside your selection** (imports, types, other files), a side panel opens on the right showing the proposed changes as a diff. The in-scope fill stays visible in your code window so you can review it side-by-side. Then:
 - Type `ok` / `yes` / `lgtm` + `:w` — applies all changes immediately
 - Type a free-form instruction + `:w` — sends back to Claude for revision
 - `q` — discard all out-of-scope changes, keep only the in-place fill
@@ -293,11 +293,11 @@ Write skeleton → visual select → <leader>nv
                                       ↓
                     response.code → spliced into buffer
                                       ↓
-                    out-of-scope changes? → follow-up float
+                    out-of-scope changes? → side panel (right vsplit)
                     ok/yes → applied to target files
 ```
 
-Claude responds in a structured JSON schema. The plugin splices `response.code` into your buffer immediately. Any changes outside your selection (imports, type definitions, other files) are shown as a diff in the follow-up float — you review and confirm before anything is written.
+Claude responds in a structured JSON schema. The plugin splices `response.code` into your buffer immediately. Any changes outside your selection (imports, type definitions, other files) are shown as a diff in a side panel on the right — you can read the in-scope fill in your code window while reviewing the proposed out-of-scope diffs alongside it, and confirm before anything is written.
 
 ---
 
