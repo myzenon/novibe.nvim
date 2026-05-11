@@ -123,7 +123,8 @@ function M.open(initial_response, opts)
     return 60
   end
 
-  local done = false
+  local done    = false
+  local current_job = nil
 
   local function set_content(r_lines, r_hls)
     local content = vim.list_extend(vim.deepcopy(r_lines), { MARKER, "" })
@@ -146,6 +147,10 @@ function M.open(initial_response, opts)
 
   local function close()
     done = true
+    if current_job then
+      pcall(function() current_job:kill(9) end)
+      current_job = nil
+    end
     if vim.api.nvim_get_current_win() == win then
       vim.cmd("stopinsert")
     end
@@ -202,10 +207,11 @@ function M.open(initial_response, opts)
       session_id   = session_id,    -- opencode: --session ID
     })
 
-    vim.system(
+    current_job = vim.system(
       cmd,
       { text = true },
       vim.schedule_wrap(function(result)
+        current_job = nil
         stop()
         if not vim.api.nvim_win_is_valid(win) then return end
 
