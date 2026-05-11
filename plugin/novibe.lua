@@ -47,21 +47,33 @@ vim.api.nvim_create_user_command("NovibeProfile", function()
     )
     return
   end
-  vim.ui.select(profiles, {
-    prompt = "Novibe: profile",
-    format_item = function(p)
-      local active = config.options.active_profile
-      local current = active and active.label == p.label
-      return p.label .. (current and "  ✓" or "")
+  local slots = {
+    { key = "active_profile",         label = "Act",     prompt = "Act profile" },
+    { key = "active_consult_profile", label = "Consult", prompt = "Consult profile" },
+  }
+  vim.ui.select(slots, {
+    prompt = "Novibe: configure profile for…",
+    format_item = function(s)
+      local cur = config.options[s.key]
+      return s.label .. (cur and ("  [" .. cur.label .. "]") or "  [none]")
     end,
-  }, function(choice)
-    if choice then
-      config.options.active_profile = choice
-      config.save_state()
-      vim.notify("novibe: profile → " .. choice.label, vim.log.levels.INFO)
-    end
+  }, function(slot)
+    if not slot then return end
+    vim.ui.select(profiles, {
+      prompt = "Novibe: " .. slot.prompt,
+      format_item = function(p)
+        local cur = config.options[slot.key]
+        return p.label .. (cur and cur.label == p.label and "  ✓" or "")
+      end,
+    }, function(choice)
+      if choice then
+        config.options[slot.key] = choice
+        config.save_state()
+        vim.notify("novibe: " .. slot.label .. " profile → " .. choice.label, vim.log.levels.INFO)
+      end
+    end)
   end)
-end, { desc = "novibe: pick profile (model + effort)" })
+end, { desc = "novibe: pick profile for Act or Consult" })
 
 vim.api.nvim_create_user_command("NovibeReset", function()
   local novibe = require("novibe")

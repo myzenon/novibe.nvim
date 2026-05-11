@@ -79,7 +79,7 @@ The matched sections for the current file are included below. You should underst
 
   local seed = table.concat(parts, "\n")
 
-  local profile       = config.options.active_profile
+  local profile       = config.options.active_consult_profile or config.options.active_profile
   local provider_name = (profile and profile.provider) or "claude"
 
   local cmd

@@ -21,6 +21,7 @@ M.defaults = {
   keymap = nil,
   bare = false,  -- set true only if you auth via ANTHROPIC_API_KEY, not claude login
   active_profile = nil,
+  active_consult_profile = nil,
   profiles = {},
   learn = {
     auto_extract_after = 3,  -- nil to disable auto-extraction
@@ -68,6 +69,9 @@ function M.save_state()
   if M.options.active_profile then
     state.active_profile_label = M.options.active_profile.label
   end
+  if M.options.active_consult_profile then
+    state.active_consult_profile_label = M.options.active_consult_profile.label
+  end
   vim.fn.mkdir(vim.fn.fnamemodify(state_path, ":h"), "p")
   vim.fn.writefile({ vim.json.encode(state) }, state_path)
 end
@@ -78,12 +82,13 @@ function M.load_state()
   if #lines == 0 then return end
   local ok, state = pcall(vim.json.decode, lines[1])
   if not ok or type(state) ~= "table" then return end
-  if state.active_profile_label then
-    for _, p in ipairs(M.options.profiles or {}) do
-      if p.label == state.active_profile_label then
-        M.options.active_profile = p
-        return
-      end
+  local profiles = M.options.profiles or {}
+  for _, p in ipairs(profiles) do
+    if state.active_profile_label and p.label == state.active_profile_label then
+      M.options.active_profile = p
+    end
+    if state.active_consult_profile_label and p.label == state.active_consult_profile_label then
+      M.options.active_consult_profile = p
     end
   end
 end
