@@ -233,7 +233,8 @@ function M.open(initial_response, opts)
             table.insert(parts, string.format("ctx %d%%", math.floor(usage.input_tokens / usage.context_window * 100)))
           end
           if #parts > 0 then
-            set_winbar("%#Title# novibe %#Normal#  " .. table.concat(parts, " · ") .. "  ·  :w send  ·  q quit")
+            local info = table.concat(parts, " · "):gsub("%%", "%%%%")
+            set_winbar("%#Title# novibe %#Normal#  " .. info .. "  ·  :w send  ·  q quit")
           end
         end
 
