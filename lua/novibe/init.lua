@@ -74,7 +74,7 @@ local function gather_file_context(bufnr)
   local dir = vim.fn.fnamemodify(file, ":h")
   local root = project_root(file)
 
-  local function rel(p) return vim.fn.fnamemodify(p, ":."):gsub("^" .. vim.pesc(root) .. "/", "") end
+  local function rel(p) return (vim.fn.fnamemodify(p, ":."):gsub("^" .. vim.pesc(root) .. "/", "")) end
 
   local seen, list = {}, {}
   local function add(p)
