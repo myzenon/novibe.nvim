@@ -162,13 +162,30 @@ Filenames must match: learned-<topic>.md]],
       return
     end
 
-    -- distill prompt asks for a JSON filename→content map (not the novibe schema).
-    -- The provider parser parses the inner JSON; for a filename map response it
-    -- returns that map directly as the "response" table.
-    local files = provider.parse_output(result.stdout)
-    if type(files) ~= "table" then
+    -- Distill expects a filename→content map, not the novibe schema.
+    -- Parse independently: unwrap --output-format json envelope, strip markdown fences.
+    local raw = vim.trim(result.stdout or "")
+    local ok1, outer = pcall(vim.json.decode, raw)
+    if ok1 and type(outer) == "table" and outer.result ~= nil then
+      raw = type(outer.result) == "string" and vim.trim(outer.result) or ""
+    end
+    raw = raw:gsub("^```[%w]*\n?", ""):gsub("\n?```%s*$", "")
+    raw = vim.trim(raw)
+
+    local ok2, files = pcall(vim.json.decode, raw)
+    if not ok2 or type(files) ~= "table" then
       vim.notify("novibe: distill response parse failed", vim.log.levels.ERROR)
       return
+    end
+
+    -- Fallback: if Claude replied in novibe schema (memory override), the map may be in .code
+    local has_learned_key = false
+    for k in pairs(files) do
+      if k:match("^learned%-") then has_learned_key = true; break end
+    end
+    if not has_learned_key and type(files.code) == "string" then
+      local ok3, extracted = pcall(vim.json.decode, files.code)
+      if ok3 and type(extracted) == "table" then files = extracted end
     end
 
     if vim.fn.isdirectory(dir) == 0 then vim.fn.mkdir(dir, "p") end
