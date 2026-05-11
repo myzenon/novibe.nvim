@@ -3,6 +3,10 @@ if vim.g.loaded_novibe then
 end
 vim.g.loaded_novibe = true
 
+vim.api.nvim_create_user_command("NovibeConsult", function(opts)
+  require("novibe.consult").open(opts.line1, opts.line2, opts.range > 0)
+end, { range = true, desc = "novibe: open interactive consult session with current file/selection context" })
+
 vim.api.nvim_create_user_command("NovibeAct", function(opts)
   require("novibe").fill(opts.line1, opts.line2)
 end, { range = true, desc = "novibe: act on selection — fill, ask, or #teach" })

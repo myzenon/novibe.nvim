@@ -1,0 +1,153 @@
+local M = {}
+
+local state = { buf = nil, win = nil, job = nil, augroup = nil }
+
+local function cleanup()
+  -- Remove augroup first so BufUnload doesn't fire during our own teardown
+  if state.augroup then
+    pcall(vim.api.nvim_del_augroup_by_id, state.augroup)
+    state.augroup = nil
+  end
+  if state.job then
+    pcall(vim.fn.jobstop, state.job)
+    state.job = nil
+  end
+  if state.buf and vim.api.nvim_buf_is_valid(state.buf) then
+    pcall(vim.api.nvim_buf_delete, state.buf, { force = true })
+  end
+  state.buf = nil
+  state.win = nil
+end
+
+-- line1/line2/has_range: passed from command range (:'<,'>NovibeConsult)
+function M.open(line1, line2, has_range)
+  cleanup()
+
+  local prev_buf = vim.api.nvim_get_current_buf()
+  local win      = vim.api.nvim_get_current_win()
+  local filename = vim.api.nvim_buf_get_name(prev_buf)
+  local cursor   = vim.api.nvim_win_get_cursor(win)
+
+  local selection
+  if has_range and line1 and line2 then
+    local lines = vim.api.nvim_buf_get_lines(prev_buf, line1 - 1, line2, false)
+    selection = table.concat(lines, "\n")
+  end
+
+  local no_vibe_txt = require("novibe.no_vibe").load(filename)
+  local config      = require("novibe.config")
+  local novibe      = require("novibe")
+  local provider    = novibe.active_provider()
+  local bin         = provider.find_bin()
+
+  if not bin then
+    vim.notify("novibe: " .. provider.name .. " binary not found", vim.log.levels.ERROR)
+    return
+  end
+
+  -- Build system prompt: novibe format explanation + file context + matched conventions
+  local parts = {}
+
+  table.insert(parts, [[
+This is a CONSULT-ONLY session. You must NOT modify any files, write any code to disk, run shell commands, or use any tools that change the filesystem. Your role is purely advisory — discuss, explain, review, and answer questions. If the user asks you to make a change, explain what the change would be instead of doing it.
+
+You are assisting a developer who uses novibe.nvim — a Neovim plugin where the user writes code skeletons and has an AI fill them in place.
+
+Project conventions are stored in one of three places (loaded in this order):
+- `NO_VIBE.md` at the project root — single-file shortcut for simple projects
+- `.no_vibe/convention-*.md` — human-written rules, split by topic
+- `.no_vibe/learned-*.md` — auto-distilled from the user's edits via `#teach`
+
+Each file uses section headers that are glob patterns:
+  ## always          → applies to every file
+  ## *.tsx, *.jsx    → applies when filename matches
+  ## use*.ts         → applies to React hooks
+
+The matched sections for the current file are included below. You should understand and reference these conventions when helping the user.]])
+
+  if filename ~= "" then
+    table.insert(parts, "\nCurrent file: " .. vim.fn.fnamemodify(filename, ":.") .. " (line " .. cursor[1] .. ")")
+  end
+  if selection and selection ~= "" then
+    table.insert(parts, "\nSelected code:\n```\n" .. selection .. "\n```")
+  end
+  if no_vibe_txt then
+    table.insert(parts, "\nProject conventions (sections matching this file):\n" .. no_vibe_txt)
+  else
+    table.insert(parts, "\nNo project conventions found for this file.")
+  end
+
+  local seed = table.concat(parts, "\n")
+
+  local profile       = config.options.active_profile
+  local provider_name = (profile and profile.provider) or "claude"
+
+  local cmd
+  if provider_name == "opencode" then
+    -- opencode TUI has no flag for pre-seeding context; user types it manually
+    cmd = { bin }
+  else
+    cmd = { bin }
+    if profile and profile.model  then vim.list_extend(cmd, { "--model",  profile.model  }) end
+    if profile and profile.effort then vim.list_extend(cmd, { "--effort", profile.effort }) end
+    -- inject context via system prompt — reliable, no timing dependency
+    vim.list_extend(cmd, { "--append-system-prompt", seed })
+  end
+
+  -- Open terminal in a horizontal split below; close split on exit
+  local function restore()
+    vim.schedule(function()
+      if state.win and vim.api.nvim_win_is_valid(state.win) then
+        vim.api.nvim_win_close(state.win, true)
+      end
+      if state.buf and vim.api.nvim_buf_is_valid(state.buf) then
+        pcall(vim.api.nvim_buf_delete, state.buf, { force = true })
+      end
+      state.buf = nil
+      state.win = nil
+    end)
+  end
+
+  vim.cmd("belowright vsplit")
+  local term_win = vim.api.nvim_get_current_win()
+  -- Replace the duplicated buffer with a fresh one so the original window is unaffected
+  local term_buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_win_set_buf(term_win, term_buf)
+  local job = vim.fn.termopen(cmd, {
+    on_exit = function()
+      state.job = nil
+      restore()
+    end,
+  })
+
+  state.buf    = vim.api.nvim_get_current_buf()
+  state.win    = term_win
+  state.job    = job
+
+  -- <Esc><Esc> exits terminal mode without sending ESC to the TUI process
+  vim.keymap.set("t", "<Esc><Esc>", "<C-\\><C-n>", { buffer = state.buf, desc = "novibe: exit terminal mode" })
+
+  local ag = vim.api.nvim_create_augroup("NovibeConsult", { clear = true })
+  state.augroup = ag
+  vim.api.nvim_create_autocmd("BufUnload", {
+    group    = ag,
+    buffer   = state.buf,
+    once     = true,
+    callback = function()
+      state.augroup = nil
+      if state.job then
+        pcall(vim.fn.jobstop, state.job)
+        state.job = nil
+      end
+      if state.win and vim.api.nvim_win_is_valid(state.win) then
+        pcall(vim.api.nvim_win_close, state.win, true)
+      end
+      state.buf = nil
+      state.win = nil
+    end,
+  })
+
+  vim.cmd("startinsert")
+end
+
+return M

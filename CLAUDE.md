@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Plugin Does
 
-`novibe.nvim` is a minimal Neovim plugin for LazyVim. The user writes function skeletons — signatures plus descriptive comments — visually selects the block, and invokes the plugin. The selection is sent to the Claude Code CLI and replaced in-place with the filled implementation. Out-of-scope changes (imports, types, other files) are proposed in a multi-turn chat float for review before applying.
+`novibe.nvim` is a minimal Neovim plugin for LazyVim. The user writes function skeletons — signatures plus descriptive comments — visually selects the block, and invokes the plugin. The selection is sent to the active AI CLI (Claude Code or opencode) and replaced in-place with the filled implementation. Out-of-scope changes (imports, types, other files) are proposed in a multi-turn chat float for review before applying.
 
 **Philosophy:** the user is the architect. Claude fills boilerplate within boundaries the user defined. AI never makes architectural decisions.
 
@@ -20,8 +20,9 @@ lua/novibe/
   glob.lua     — glob → Lua pattern conversion + section header matching
   no_vibe.lua  — loads NO_VIBE.md + .no_vibe/convention-*.md + .no_vibe/learned-*.md, filters by filename
   learn.lua    — #teach diff capture (.no_vibe/diffs.json) + distillation into learned-*.md topic files
+  consult.lua  — singleton interactive consult: opens in current window, seeds file/line/selection/conventions; supports claude and opencode TUI
 plugin/
-  novibe.lua   — guard + :NovibeAct, :NovibeProfile, :NovibeDistill user commands
+  novibe.lua   — guard + :NovibeAct, :NovibeConsult, :NovibeProfile, :NovibeDistill user commands
 ```
 
 ## Core Flow
@@ -30,7 +31,8 @@ plugin/
 Visual select skeleton (or cursor on line)
   → input.lua float (vim.ui replacement, :w to submit)
   → prompt assembled: system_prompt + matched convention/learned sections + context + selection + instruction
-  → claude [--model X] [--effort Y] --continue --print "prompt"
+  → claude [--model X] [--effort Y] --continue --print "prompt"   (claude provider)
+  → opencode run [--model X] [--variant Y] [--session ID] "prompt" (opencode provider)
   → JSON response parsed
   → response.code spliced into buffer immediately
   → if response.message or response.changes → chat.lua float opens
@@ -41,11 +43,13 @@ Visual select skeleton (or cursor on line)
 ## Commands
 
 - `:NovibeAct` — act on current line or explicit range (e.g. `:'<,'>NovibeAct`); input float accepts free-form instruction, `#teach <reason>` to accumulate a diff
+- `:NovibeConsult` — open singleton interactive session in a vertical split; process is killed when buffer closes; `<Esc><Esc>` exits terminal mode; range `:'<,'>NovibeConsult` injects the selection. **Claude only:** context (file, line, selection, matched `.no_vibe` sections, novibe format explanation, consult-only enforcement) is injected via `--append-system-prompt`. **opencode limitation:** no equivalent CLI flag exists — context cannot be injected; user must provide it manually.
 - `:NovibeProfile` — picker to select an active profile (model + effort); no profile = claude CLI defaults
 - `:NovibeDistill` — distill accumulated diffs from `#teach` into topic-organized `.no_vibe/learned-*.md` files (Claude decides the topic split)
 
 ## CLI Invocation
 
+**Claude provider (`provider = "claude"`):**
 ```lua
 { claude_bin, "--continue", "--print", prompt }
 -- with active profile:
@@ -56,21 +60,44 @@ Visual select skeleton (or cursor on line)
 
 `--continue` maintains session context across selections. `--bare` skips hooks, plugins, memory injection — only safe if auth is via `ANTHROPIC_API_KEY`, not `claude login`. `--model` and `--effort` are only added when an active profile is set.
 
+**opencode provider (`provider = "opencode"`):**
+```lua
+{ opencode_bin, "run", "--format", "json", prompt }
+-- with active profile:
+{ opencode_bin, "run", "--format", "json", "--model", profile.model, "--variant", profile.effort, prompt }
+-- with session continuity:
+{ opencode_bin, "run", "--format", "json", "--session", session_id, prompt }
+```
+
+opencode has no `--continue`; session continuity is maintained by passing the `sessionID` returned in each response back as `--session` on the next call. `--variant` maps to opencode's effort levels. `--bare` is not applicable.
+
+**`:NovibeConsult` (both providers):**
+```lua
+-- claude TUI:
+{ claude_bin }  -- optional --model / --effort from active profile
+-- opencode TUI:
+{ opencode_bin }  -- no CLI flags; model configured inside the TUI
+```
+
 ## Profiles
 
-User-defined in `setup()`. No defaults — must be explicit. No active profile = claude CLI chooses model and effort.
+User-defined in `setup()`. No defaults — must be explicit. No active profile = provider CLI chooses model and effort.
 
 ```lua
 require("novibe").setup({
   profiles = {
-    { label = "Fast", model = "claude-haiku-4-5-20251001", effort = "low" },
-    { label = "Best", model = "claude-opus-4-7",           effort = "max" },
+    { label = "Claude Best",  provider = "claude",   model = "claude-opus-4-7",              effort = "max"  },
+    { label = "Claude Fast",  provider = "claude",   model = "claude-haiku-4-5-20251001",    effort = "low"  },
+    { label = "OC DeepSeek",  provider = "opencode", model = "opencode-go/deepseek-v4-pro",  effort = "high" },
   }
 })
 ```
 
-`effort` values: `low`, `medium`, `high`, `xhigh`, `max` (real `--effort` CLI flag).
-`model` values: full ID (e.g. `claude-sonnet-4-6`) or alias (`sonnet`, `opus`).
+`provider`: `"claude"` (default) or `"opencode"`.
+`effort` for claude: `low`, `medium`, `high`, `xhigh`, `max` (maps to `--effort`).
+`effort` for opencode: maps to `--variant` (values depend on the model).
+`model` for claude: full ID (e.g. `claude-sonnet-4-6`) or alias (`sonnet`, `opus`).
+`model` for opencode: `"provider/model"` format (e.g. `"opencode-go/deepseek-v4-pro"`). Run `opencode models` to list available options.
 
 ## JSON Response Schema
 

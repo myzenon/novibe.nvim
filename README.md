@@ -29,7 +29,7 @@ Optional: [snacks.nvim](https://github.com/folke/snacks.nvim) for the `<C-f>` fi
 ```lua
 {
   "myzenon/novibe.nvim",
-  cmd = { "NovibeAct", "NovibeProfile", "NovibeDistill", "NovibePromote", "NovibeReset", "NovibeStatus", "NovibeConventions", "NovibeLearns" },
+  cmd = { "NovibeAct", "NovibeConsult", "NovibeProfile", "NovibeDistill", "NovibePromote", "NovibeReset", "NovibeStatus", "NovibeConventions", "NovibeLearns" },
   keys = {
     { "<leader>aa", ":NovibeAct<CR>", mode = "v", desc = "novibe: fill implementation" },
     { "<leader>aa", ":NovibeAct<CR>", mode = "n", desc = "novibe: act on current line" },
@@ -89,6 +89,7 @@ You can also run `:NovibeAct` with the cursor on a single line — no visual sel
 | Command              | What                                                         |
 | -------------------- | ------------------------------------------------------------ |
 | `:NovibeAct`         | Fill selection (or current line)                             |
+| `:NovibeConsult`     | Open interactive consult session (vsplit); Claude: context auto-injected; opencode: manual |
 | `:NovibeProfile`     | Pick the active profile (model + effort + provider)          |
 | `:NovibeReset`       | Start a fresh session on the next fill                       |
 | `:NovibeStatus`      | Show profile, session, cost, ctx %, loaded rule files        |
