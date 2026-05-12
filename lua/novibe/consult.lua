@@ -205,7 +205,7 @@ function M.send_prompt(line1, line2, has_range)
   end
   local seed = build_seed(line1, line2, has_range)
   -- Strip trailing newlines then add exactly one so the TUI auto-submits.
-  seed = seed:gsub("[\r\n]+$", "") .. "\n"
+  seed = seed:gsub("[\r\n]+$", "") .. "\r"
   local ok, err = pcall(vim.api.nvim_chan_send, state.job, seed)
   if ok then
     vim.notify("novibe: prompt sent to consult — press Enter in the terminal to submit", vim.log.levels.INFO)
