@@ -95,11 +95,16 @@ The matched sections for the current file are included below. You should underst
   if provider_name == "opencode" then
     -- opencode TUI has no flag for pre-seeding context; user types it manually
     cmd = { bin }
+  elseif provider_name == "gemini" then
+    -- --prompt-interactive seeds context then stays in interactive TUI mode
+    cmd = { bin, "--skip-trust" }
+    if profile and profile.model then vim.list_extend(cmd, { "--model", profile.model }) end
+    vim.list_extend(cmd, { "--prompt-interactive", seed })
   else
+    -- claude: inject context via system prompt
     cmd = { bin }
     if profile and profile.model  then vim.list_extend(cmd, { "--model",  profile.model  }) end
     if profile and profile.effort then vim.list_extend(cmd, { "--effort", profile.effort }) end
-    -- inject context via system prompt — reliable, no timing dependency
     vim.list_extend(cmd, { "--append-system-prompt", seed })
   end
 
