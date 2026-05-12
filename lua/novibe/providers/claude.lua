@@ -30,11 +30,38 @@ function M.build_cmd(bin, prompt, opts)
   return cmd
 end
 
+-- Try to extract a JSON object from a string that may have leading/trailing prose.
+local function extract_json(s)
+  s = vim.trim(s)
+  -- strip markdown fences
+  s = s:gsub("^```[%w]*\n?", ""):gsub("\n?```%s*$", "")
+  s = vim.trim(s)
+  local ok, parsed = pcall(vim.json.decode, s)
+  if ok and type(parsed) == "table" then return parsed end
+  -- find first { to last } and try that substring
+  local i = s:find("{")
+  local last_j = nil
+  local pos = 1
+  while true do
+    local found = s:find("}", pos, true)
+    if not found then break end
+    last_j = found
+    pos = found + 1
+  end
+  if i and last_j and last_j >= i then
+    local ok2, parsed2 = pcall(vim.json.decode, s:sub(i, last_j))
+    if ok2 and type(parsed2) == "table" then return parsed2 end
+  end
+  return nil
+end
+
 -- Returns response, usage. Usage may be nil if envelope missing.
 function M.parse_output(stdout)
   local raw = vim.trim(stdout)
   local ok, outer = pcall(vim.json.decode, raw)
   if not ok then
+    local extracted = extract_json(raw)
+    if extracted then return extracted, nil end
     return { code = raw, changes = {}, message = nil, done = true }, nil
   end
 
@@ -59,7 +86,7 @@ function M.parse_output(stdout)
   local inner_raw = type(outer.result) == "string" and outer.result or ""
   local ok2, response = pcall(vim.json.decode, inner_raw)
   if not ok2 then
-    response = { code = inner_raw, changes = {}, message = nil, done = true }
+    response = extract_json(inner_raw) or { code = inner_raw, changes = {}, message = nil, done = true }
   end
 
   return response, usage
