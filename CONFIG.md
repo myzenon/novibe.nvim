@@ -50,6 +50,10 @@ require("novibe").setup({
     -- opencode (model uses "provider/model" format; effort maps to --variant)
     { label = "OC Sonnet", provider = "opencode", model = "anthropic/claude-sonnet-4-5", effort = "high" },
     { label = "OC GPT-5",  provider = "opencode", model = "openai/gpt-5",                effort = "medium" },
+
+    -- Gemini CLI (no effort/variant equivalent)
+    { label = "Gemini Flash", provider = "gemini", model = "gemini-2.0-flash" },
+    { label = "Gemini Pro",   provider = "gemini", model = "gemini-2.5-pro" },
   },
 })
 ```
@@ -58,7 +62,7 @@ Switching profiles via `:NovibeProfile` swaps everything atomically. LazyVim wit
 
 ### Fields
 
-**`provider`** — `"claude"` (default if omitted) or `"opencode"`.
+**`provider`** — `"claude"` (default if omitted), `"opencode"`, or `"gemini"`.
 
 **`model`** — full model ID or alias accepted by the active provider's CLI.
 
@@ -72,6 +76,8 @@ For **Claude**:
 
 For **opencode**: use `provider/model` format. Run `opencode models` to list everything available, e.g. `anthropic/claude-sonnet-4-5`, `openai/gpt-5`, `google/gemini-2.5-pro`.
 
+For **Gemini CLI**: full model ID, e.g. `gemini-2.0-flash`, `gemini-2.5-pro`. Check `/model` in an interactive `gemini` session to see what's available.
+
 **`file_context`** — `true` injects sibling files (same directory) and parsed imports from the current buffer into the prompt as a "Project files" list. The model is instructed to only reference these paths in `changes[]`. Defaults to `false`.
 
 Recommended for cheaper / less reliable models that tend to hallucinate file paths (e.g. inventing `src/components/X.tsx` when a component is actually inline). Disable for Claude Opus / Sonnet — they generally don't need it and you save tokens.
@@ -80,7 +86,7 @@ Recommended for cheaper / less reliable models that tend to hallucinate file pat
 { label = "OC GPT-5", provider = "opencode", model = "openai/gpt-5", effort = "high", file_context = true }
 ```
 
-**`effort`** — Claude maps to `--effort`, opencode maps to `--variant`:
+**`effort`** — Claude maps to `--effort`, opencode maps to `--variant`. Gemini has no equivalent and ignores this field.
 
 | Level | Notes |
 |---|---|
@@ -96,7 +102,7 @@ Recommended for cheaper / less reliable models that tend to hallucinate file pat
 
 ## Provider differences
 
-Both providers are first-class. novibe normalizes most of the differences (session continuity, JSON output, usage stats), but a few CLI quirks surface in the UI. Knowing them helps you read the status line and pick the right `effort` level.
+All three providers are first-class. novibe normalizes most of the differences (session continuity, JSON output, usage stats), but a few CLI quirks surface in the UI. Knowing them helps you read the status line and pick the right `effort` level.
 
 ### Claude Code
 
@@ -113,6 +119,16 @@ Both providers are first-class. novibe normalizes most of the differences (sessi
 - **`--variant`** maps from `effort`. Same level names, but support depends on the model.
 - **Tools / default agent**: opencode's default `build` agent has tool access. novibe's strict JSON system prompt usually keeps the model from invoking tools, but if you see file edits happening outside the review flow, configure a no-tools agent (see `opencode agent`) and reference it as your default.
 - **Hallucinated paths**: cheaper models on opencode are more prone to inventing file paths in `changes[]`. Set `file_context = true` on the profile to inject a "Project files" allow-list — see [Profiles → fields](#fields).
+
+### Gemini CLI
+
+- **Sessions**: novibe captures `session_id` from the first response and reuses it via `--session-id UUID`. Mirrors Claude's `--continue` UX. `:NovibeReset` clears it.
+- **`bare` mode**: silently ignored — Claude-only.
+- **`effort` / `--variant`**: no equivalent — Gemini CLI has no reasoning effort flag, so the `effort` field is ignored.
+- **Workspace trust**: Gemini requires the workspace to be trusted before non-interactive runs work. The cleanest way is to run `gemini` interactively in your project once and trust the directory, or set `GEMINI_CLI_TRUST_WORKSPACE=true` in your environment.
+- **Cost**: not reported by the CLI (free tier).
+- **Context window %**: not exposed — Gemini CLI doesn't report context window size.
+- **Consult**: context is injected via `--prompt-interactive` (gemini's equivalent of claude's `--append-system-prompt`).
 
 ---
 

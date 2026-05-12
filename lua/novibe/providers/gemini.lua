@@ -17,9 +17,10 @@ end
 
 -- opts: { profile, session_id }
 -- gemini has no --bare or --continue; session continuity uses --session-id.
--- --skip-trust is required for non-interactive use outside trusted dirs.
+-- Workspace must be trusted (run `gemini` interactively once and trust the dir,
+-- or set GEMINI_CLI_TRUST_WORKSPACE=true).
 function M.build_cmd(bin, prompt, opts)
-  local cmd = { bin, "--output-format", "json", "--skip-trust" }
+  local cmd = { bin, "--output-format", "json" }
   if opts.profile and opts.profile.model then
     vim.list_extend(cmd, { "--model", opts.profile.model })
   end

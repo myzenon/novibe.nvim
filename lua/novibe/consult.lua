@@ -97,7 +97,7 @@ The matched sections for the current file are included below. You should underst
     cmd = { bin }
   elseif provider_name == "gemini" then
     -- --prompt-interactive seeds context then stays in interactive TUI mode
-    cmd = { bin, "--skip-trust" }
+    cmd = { bin }
     if profile and profile.model then vim.list_extend(cmd, { "--model", profile.model }) end
     vim.list_extend(cmd, { "--prompt-interactive", seed })
   else

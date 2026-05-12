@@ -43,8 +43,8 @@ Visual select skeleton (or cursor on line)
 ## Commands
 
 - `:NovibeAct` — act on current line or explicit range (e.g. `:'<,'>NovibeAct`); input float accepts free-form instruction, `#teach <reason>` to accumulate a diff
-- `:NovibeConsult` — open singleton interactive session in a vertical split; process is killed when buffer closes; `<Esc><Esc>` exits terminal mode; range `:'<,'>NovibeConsult` injects the selection. **Claude only:** context (file, line, selection, matched `.no_vibe` sections, novibe format explanation, consult-only enforcement) is injected via `--append-system-prompt`. **opencode limitation:** no equivalent CLI flag exists — context cannot be injected; user must provide it manually.
-- `:NovibeProfile` — picker to select an active profile (model + effort); no profile = claude CLI defaults
+- `:NovibeConsult` — open singleton interactive session in a vertical split; process is killed when buffer closes; `<Esc><Esc>` exits terminal mode; range `:'<,'>NovibeConsult` injects the selection. Context (file, line, selection, matched `.no_vibe` sections, novibe format explanation, consult-only enforcement) is injected via `--append-system-prompt` for **claude**, `--prompt-interactive` for **gemini**. **opencode limitation:** no equivalent CLI flag exists — context cannot be injected; user must provide it manually.
+- `:NovibeProfile` — two-step picker: choose slot (Act / Consult), then profile. Each slot persists independently. No profile = CLI defaults.
 - `:NovibeDistill` — distill accumulated diffs from `#teach` into topic-organized `.no_vibe/learned-*.md` files (Claude decides the topic split)
 
 ## CLI Invocation
@@ -71,12 +71,25 @@ Visual select skeleton (or cursor on line)
 
 opencode has no `--continue`; session continuity is maintained by passing the `sessionID` returned in each response back as `--session` on the next call. `--variant` maps to opencode's effort levels. `--bare` is not applicable.
 
-**`:NovibeConsult` (both providers):**
+**gemini provider (`provider = "gemini"`):**
+```lua
+{ gemini_bin, "--output-format", "json", "--prompt", prompt }
+-- with active profile:
+{ gemini_bin, "--output-format", "json", "--model", profile.model, "--prompt", prompt }
+-- with session continuity:
+{ gemini_bin, "--output-format", "json", "--session-id", session_id, "--prompt", prompt }
+```
+
+gemini has no `--continue`; session continuity uses `--session-id` with the UUID returned in the previous response's `session_id` field. No `--effort`/`--variant` equivalent. No `--bare`. The workspace must be trusted — run `gemini` interactively once and trust the directory, or set `GEMINI_CLI_TRUST_WORKSPACE=true`.
+
+**`:NovibeConsult` (all providers):**
 ```lua
 -- claude TUI:
-{ claude_bin }  -- optional --model / --effort from active profile
+{ claude_bin, "--append-system-prompt", seed }  -- + optional --model / --effort
 -- opencode TUI:
-{ opencode_bin }  -- no CLI flags; model configured inside the TUI
+{ opencode_bin }  -- no CLI flag for context seeding; user provides it manually
+-- gemini TUI:
+{ gemini_bin, "--prompt-interactive", seed }    -- + optional --model
 ```
 
 ## Profiles
@@ -89,15 +102,18 @@ require("novibe").setup({
     { label = "Claude Best",  provider = "claude",   model = "claude-opus-4-7",              effort = "max"  },
     { label = "Claude Fast",  provider = "claude",   model = "claude-haiku-4-5-20251001",    effort = "low"  },
     { label = "OC DeepSeek",  provider = "opencode", model = "opencode-go/deepseek-v4-pro",  effort = "high" },
+    { label = "Gemini Flash", provider = "gemini",   model = "gemini-2.0-flash"                              },
   }
 })
 ```
 
-`provider`: `"claude"` (default) or `"opencode"`.
+`provider`: `"claude"` (default), `"opencode"`, or `"gemini"`.
 `effort` for claude: `low`, `medium`, `high`, `xhigh`, `max` (maps to `--effort`).
 `effort` for opencode: maps to `--variant` (values depend on the model).
+`effort` for gemini: ignored (no CLI flag equivalent).
 `model` for claude: full ID (e.g. `claude-sonnet-4-6`) or alias (`sonnet`, `opus`).
 `model` for opencode: `"provider/model"` format (e.g. `"opencode-go/deepseek-v4-pro"`). Run `opencode models` to list available options.
+`model` for gemini: full ID (e.g. `gemini-2.0-flash`, `gemini-2.5-pro`). Run `gemini` and check `/model` in the TUI to see available options.
 
 ## JSON Response Schema
 

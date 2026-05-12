@@ -163,11 +163,31 @@ Filenames must match: learned-<topic>.md]],
     end
 
     -- Distill expects a filename→content map, not the novibe schema.
-    -- Parse independently: unwrap --output-format json envelope, strip markdown fences.
+    -- Parse independently: strip any prose before/after JSON, unwrap the
+    -- provider envelope (claude: outer.result, gemini: outer.response),
+    -- strip markdown fences.
     local raw = vim.trim(result.stdout or "")
+    local first = raw:find("{")
+    local last  = nil
+    if first then
+      local pos = first
+      while true do
+        local found = raw:find("}", pos, true)
+        if not found then break end
+        last = found
+        pos = found + 1
+      end
+    end
+    if first and last then
+      raw = raw:sub(first, last)
+    end
     local ok1, outer = pcall(vim.json.decode, raw)
-    if ok1 and type(outer) == "table" and outer.result ~= nil then
-      raw = type(outer.result) == "string" and vim.trim(outer.result) or ""
+    if ok1 and type(outer) == "table" then
+      if type(outer.result) == "string" then
+        raw = vim.trim(outer.result)
+      elseif type(outer.response) == "string" then
+        raw = vim.trim(outer.response)
+      end
     end
     raw = raw:gsub("^```[%w]*\n?", ""):gsub("\n?```%s*$", "")
     raw = vim.trim(raw)

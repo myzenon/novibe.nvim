@@ -2,7 +2,7 @@
 
 > _"No vibe, just smart auto completion."_
 
-A minimal Neovim plugin that uses your AI coding CLI ([Claude Code](https://claude.ai/code) or [opencode](https://opencode.ai/)) as a **code fulfillment tool, not a vibe coder**.
+A minimal Neovim plugin that uses your AI coding CLI ([Claude Code](https://claude.ai/code), [opencode](https://opencode.ai/), or [Gemini CLI](https://geminicli.com/)) as a **code fulfillment tool, not a vibe coder**.
 
 You design the structure. You write the skeleton — function signature, comments describing intent and algorithm. The model fills the implementation within your boundaries. You already understand the code because you designed it.
 
@@ -17,7 +17,7 @@ You design the structure. You write the skeleton — function signature, comment
 ## Requirements
 
 - Neovim 0.10+
-- One of: [Claude Code CLI](https://claude.ai/code) (`claude login`) or [opencode](https://opencode.ai/) (`opencode auth login`)
+- One of: [Claude Code CLI](https://claude.ai/code) (`claude login`), [opencode](https://opencode.ai/) (`opencode auth login`), or [Gemini CLI](https://geminicli.com/) (`gemini auth`)
 - [lazy.nvim](https://github.com/folke/lazy.nvim)
 
 Optional: [snacks.nvim](https://github.com/folke/snacks.nvim) for the `<C-f>` file picker in the input float.
@@ -40,7 +40,8 @@ Optional: [snacks.nvim](https://github.com/folke/snacks.nvim) for the `<C-f>` fi
         { label = "Claude Best",  provider = "claude",   model = "opus",                       effort = "max"  },
         { label = "OC DeepSeek",  provider = "opencode", model = "opencode-go/deepseek-v4-pro", effort = "high", file_context = false },
         { label = "OC Qwen",      provider = "opencode", model = "opencode-go/qwen3.6-plus",    effort = "high", file_context = true },
-        -- Run `opencode models` to see everything available. See CONFIG.md for full options.
+        { label = "Gemini Flash", provider = "gemini",   model = "gemini-2.0-flash" },
+        -- Run `opencode models` (or check `/model` in `gemini`) to see everything available. See CONFIG.md.
       },
     })
   end,
@@ -57,6 +58,7 @@ Bootstrap your project conventions by running your AI CLI in the project root:
 
 - **Claude Code** — start `claude`, then paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/claude-init.md and follow the instructions."`
 - **opencode** — start `opencode`, then paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/opencode-init.md and follow the instructions."`
+- **Gemini CLI** — start `gemini`, trust the workspace when prompted, then paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/claude-init.md and follow the instructions."` (the claude init prompt is provider-agnostic enough to work)
 
 The agent analyzes your project, generates `.no_vibe/convention-project.md`, and writes the novibe format spec into `CLAUDE.md` / `AGENTS.md` so it auto-loads in future sessions.
 
@@ -89,8 +91,8 @@ You can also run `:NovibeAct` with the cursor on a single line — no visual sel
 | Command              | What                                                         |
 | -------------------- | ------------------------------------------------------------ |
 | `:NovibeAct`         | Fill selection (or current line)                             |
-| `:NovibeConsult`     | Open interactive consult session (vsplit); Claude: context auto-injected; opencode: manual |
-| `:NovibeProfile`     | Pick the active profile (model + effort + provider)          |
+| `:NovibeConsult`     | Open interactive consult session (vsplit); claude / gemini: context auto-injected; opencode: manual |
+| `:NovibeProfile`     | Two-step picker: choose slot (Act / Consult), then profile   |
 | `:NovibeReset`       | Start a fresh session on the next fill                       |
 | `:NovibeStatus`      | Show profile, session, cost, ctx %, loaded rule files        |
 | `:NovibeConventions` | Browse canonical `convention-*.md` files                     |
