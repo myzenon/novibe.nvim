@@ -63,7 +63,12 @@ vim.api.nvim_create_user_command("NovibeProfile", function()
       prompt = "Novibe: " .. slot.prompt,
       format_item = function(p)
         local cur = config.options[slot.key]
-        return p.label .. (cur and cur.label == p.label and "  ✓" or "")
+        local prov = p.provider or "claude"
+        local detail = "[" .. prov .. "]"
+        if p.model then detail = detail .. "  " .. p.model end
+        if p.effort then detail = detail .. "  effort=" .. p.effort end
+        local active = cur and cur.label == p.label and "  ✓" or ""
+        return p.label .. "  " .. detail .. active
       end,
     }, function(choice)
       if choice then
