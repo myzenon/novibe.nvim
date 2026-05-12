@@ -136,6 +136,13 @@ The matched sections for the current file are included below. You should underst
   -- <Esc><Esc> exits terminal mode without sending ESC to the TUI process
   vim.keymap.set("t", "<Esc><Esc>", "<C-\\><C-n>", { buffer = state.buf, desc = "novibe: exit terminal mode" })
 
+  -- Override TmuxNavigator terminal-mode mappings so they exit terminal mode
+  -- first and let the normal-mode mapping handle navigation, instead of leaking
+  -- command text ("TmuxNavigateLeft" etc.) into the terminal process.
+  for _, key in ipairs({ "<C-h>", "<C-j>", "<C-k>", "<C-l>" }) do
+    vim.keymap.set("t", key, "<C-\\><C-n>" .. key, { buffer = state.buf, nowait = true })
+  end
+
   local ag = vim.api.nvim_create_augroup("NovibeConsult", { clear = true })
   state.augroup = ag
   vim.api.nvim_create_autocmd("BufUnload", {
