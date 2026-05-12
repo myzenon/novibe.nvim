@@ -178,10 +178,13 @@ function M.open(line1, line2, has_range)
   })
 
   if provider_name == "opencode" then
-    -- Return focus to source window so user can immediately run :NovibeConsultPrompt
+    -- Return focus to source window; auto-send prompt after opencode has had time to start
     if vim.api.nvim_win_is_valid(prev_win) then
       vim.api.nvim_set_current_win(prev_win)
     end
+    vim.defer_fn(function()
+      M.send_prompt(line1, line2, has_range)
+    end, 3000)
   else
     vim.cmd("startinsert")
   end
