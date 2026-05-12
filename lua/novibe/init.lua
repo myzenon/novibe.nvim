@@ -220,22 +220,20 @@ function M.fill(line1, line2)
   input.open(function(user_prompt)
     if user_prompt == nil then return end
 
-    -- #teach mode: diff current selection against last fill
+    -- #teach mode: accumulate evidence for distillation.
+    -- If a recent fill exists in this buffer, captures the diff (AI vs user).
+    -- Otherwise records the current selection as a direct rule note.
     if vim.startswith(user_prompt, "#teach") then
-      if not M._last_fill then
-        vim.notify("novibe: no recent fill to teach from", vim.log.levels.WARN)
-        return
-      end
-      if M._last_fill.bufnr ~= bufnr then
-        vim.notify("novibe: last fill was in a different buffer — switch to it to use #teach", vim.log.levels.WARN)
-        return
-      end
       local reason  = vim.trim(user_prompt:sub(7))
       local current = table.concat(
         vim.api.nvim_buf_get_lines(bufnr, start_line - 1, end_line, false), "\n"
       )
+      local original = nil
+      if M._last_fill and M._last_fill.bufnr == bufnr then
+        original = M._last_fill.original
+      end
       learn.teach(
-        M._last_fill.original,
+        original,
         current,
         reason,
         vim.api.nvim_buf_get_name(bufnr),

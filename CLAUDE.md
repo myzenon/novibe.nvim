@@ -42,7 +42,7 @@ Visual select skeleton (or cursor on line)
 
 ## Commands
 
-- `:NovibeAct` — act on current line or explicit range (e.g. `:'<,'>NovibeAct`); input float accepts free-form instruction, `#teach <reason>` to accumulate a diff
+- `:NovibeAct` — act on current line or explicit range (e.g. `:'<,'>NovibeAct`); input float accepts free-form instruction, or `#teach <reason>` to accumulate evidence (diff if editing a recent fill, otherwise a direct rule note)
 - `:NovibeConsult` — open singleton interactive session in a vertical split; process is killed when buffer closes; `<Esc><Esc>` exits terminal mode; range `:'<,'>NovibeConsult` injects the selection. Context (file, line, selection, matched `.no_vibe` sections, novibe format explanation, consult-only enforcement) is injected via `--append-system-prompt` for **claude**, `--prompt-interactive` for **gemini**. **opencode limitation:** no equivalent CLI flag exists — context cannot be injected; user must provide it manually.
 - `:NovibeProfile` — two-step picker: choose slot (Act / Consult), then profile. Each slot persists independently. No profile = CLI defaults.
 - `:NovibeDistill` — distill accumulated diffs from `#teach` into topic-organized `.no_vibe/learned-*.md` files (Claude decides the topic split)
@@ -175,7 +175,12 @@ Special header `always` always loads regardless of filename.
 
 ## #teach / Distillation Flow
 
-After a `:NovibeAct` fill, the user can edit the result, re-select, and run `:NovibeAct` again with `#teach <reason>`. `learn.lua` captures the diff (original vs current selection) into `.no_vibe/diffs.json`.
+`#teach <reason>` accumulates evidence into `.no_vibe/diffs.json` in two modes:
+
+- **Diff mode** — after a `:NovibeAct` fill, the user edits the result, re-selects, and runs `:NovibeAct` with `#teach <reason>`. The diff (original vs current selection) is captured.
+- **Note mode** — `:NovibeAct` on any selection with `#teach <reason>` (no recent fill in this buffer required). The selection + reason is captured as a direct rule note, with no `original` field. Distillation treats both kinds as equally valid evidence.
+
+The plugin picks the mode automatically: if `_last_fill` exists for the current buffer and the selection differs from the last fill's output, it's a diff; otherwise it's a note. Both require a non-empty reason if there's no diff to infer from.
 
 Auto-distillation triggers when accumulated diffs reach the threshold:
 - **1** if no `learned-*.md` files exist yet (fresh project — fast feedback)

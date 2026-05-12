@@ -48,19 +48,27 @@ local function effective_threshold(configured)
 end
 
 function M.teach(original, current, reason, filename, provider, bin, auto_after, profile)
-  if original == current then
-    vim.notify("novibe: no changes detected — nothing to teach", vim.log.levels.WARN)
+  local has_diff = original ~= nil and original ~= current
+  local has_reason = reason and reason ~= ""
+
+  if not has_diff and not has_reason then
+    vim.notify(
+      "novibe: nothing to teach — provide a #teach reason, or edit a recent fill to create a diff",
+      vim.log.levels.WARN
+    )
     return
   end
 
-  local diffs = load_diffs()
-  table.insert(diffs, {
-    original = original,
+  local entry = {
     current  = current,
-    reason   = reason ~= "" and reason or nil,
+    reason   = has_reason and reason or nil,
     filename = vim.fn.fnamemodify(filename, ":."),
     at       = os.date("%Y-%m-%d %H:%M"),
-  })
+  }
+  if has_diff then entry.original = original end
+
+  local diffs = load_diffs()
+  table.insert(diffs, entry)
   save_diffs(diffs)
 
   local threshold = effective_threshold(auto_after)
@@ -97,10 +105,15 @@ function M.extract(provider, bin, profile)
   local parts = {
     [[You organize coding style rules into topic-focused files.
 
-You will receive existing rule files and new code diffs with reasons.
+You will receive existing rule files and new evidence with reasons.
+Evidence comes in two forms:
+- Diffs: original AI output + the user's corrected version (the user edited a fill)
+- Notes: a user code sample + an explicit teaching reason (no AI involvement — direct instruction)
+
+Treat both as equally valid signal. Diffs imply the rule from the change; notes state it via the reason and example.
 
 Your job:
-- Analyze diffs and reasons to understand the user's coding preferences
+- Analyze the evidence to understand the user's coding preferences
 - Decide which topic file each rule belongs to (e.g. learned-style.md, learned-react.md, learned-loops.md)
 - Rewrite affected files cleanly — merge, deduplicate, resolve contradictions
 - Create new topic files when a new theme emerges
@@ -111,10 +124,10 @@ Each file uses NO_VIBE.md section format:
   ## *.tsx        — rule applies only to matching files
 
 Support count tracking (CRITICAL):
-- Every rule line MUST end with an HTML comment of the form <!-- n=N --> where N is the number of distinct diffs that support this rule.
+- Every rule line MUST end with an HTML comment of the form <!-- n=N --> where N is the number of distinct evidence items supporting this rule.
 - When you preserve an existing rule unchanged, KEEP its existing N value.
-- When a new diff reinforces an existing rule, INCREMENT its N (e.g. n=4 -> n=5).
-- When you create a new rule from M diffs, set n=M.
+- When new evidence reinforces an existing rule, INCREMENT its N (e.g. n=4 -> n=5).
+- When you create a new rule from M items, set n=M.
 - When you merge two rules into one, sum their N values.
 - Format: `- rule text <!-- n=3 -->`
 
@@ -136,13 +149,19 @@ Filenames must match: learned-<topic>.md]],
     table.insert(parts, "")
   end
 
-  table.insert(parts, string.format("New diffs to incorporate (%d):", #diffs))
+  table.insert(parts, string.format("New evidence to incorporate (%d):", #diffs))
   for i, diff in ipairs(diffs) do
-    table.insert(parts, string.format("\n--- Diff %d (%s, %s) ---", i, diff.filename or "unknown", diff.at or ""))
-    table.insert(parts, "AI wrote:")
-    table.insert(parts, diff.original)
-    table.insert(parts, "User changed to:")
-    table.insert(parts, diff.current)
+    local kind = diff.original and "Diff" or "Note"
+    table.insert(parts, string.format("\n--- %s %d (%s, %s) ---", kind, i, diff.filename or "unknown", diff.at or ""))
+    if diff.original then
+      table.insert(parts, "AI wrote:")
+      table.insert(parts, diff.original)
+      table.insert(parts, "User changed to:")
+      table.insert(parts, diff.current)
+    else
+      table.insert(parts, "User code (direct teaching — no AI diff):")
+      table.insert(parts, diff.current)
+    end
     if diff.reason then
       table.insert(parts, "Reason: " .. diff.reason)
     end
