@@ -281,6 +281,12 @@ function M.fill(line1, line2)
       table.insert(parts, "Context after selection (DO NOT reproduce this):")
       table.insert(parts, table.concat(ctx_after, "\n"))
     end
+    local diag_txt = require("novibe.diag").format(bufnr, start_line, end_line)
+    if diag_txt then
+      table.insert(parts, "")
+      table.insert(parts, diag_txt)
+    end
+
     if user_prompt ~= "" then
       table.insert(parts, "")
       table.insert(parts, "Instruction: " .. user_prompt)

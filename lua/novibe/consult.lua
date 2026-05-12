@@ -71,6 +71,15 @@ The matched sections for the current file are included below. You should underst
   if selection and selection ~= "" then
     table.insert(parts, "\nSelected code:\n```\n" .. selection .. "\n```")
   end
+  local diag_txt = require("novibe.diag").format(
+    prev_buf,
+    has_range and line1 or nil,
+    has_range and line2 or nil
+  )
+  if diag_txt then
+    table.insert(parts, "\n" .. diag_txt)
+  end
+
   if no_vibe_txt then
     table.insert(parts, "\nProject conventions (sections matching this file):\n" .. no_vibe_txt)
   else
