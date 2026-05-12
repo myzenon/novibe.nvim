@@ -19,10 +19,10 @@ local function cleanup()
   state.win = nil
 end
 
--- line1/line2/has_range: passed from command range (:'<,'>NovibeConsult)
-function M.open(line1, line2, has_range)
-  cleanup()
-
+-- Build the consult seed text from the current buffer/selection/conventions.
+-- Used by both :NovibeConsult (injected via CLI flag where supported) and
+-- :NovibeConsultPrompt (chansent into an already-running opencode terminal).
+local function build_seed(line1, line2, has_range)
   local prev_buf = vim.api.nvim_get_current_buf()
   local win      = vim.api.nvim_get_current_win()
   local filename = vim.api.nvim_buf_get_name(prev_buf)
@@ -35,18 +35,7 @@ function M.open(line1, line2, has_range)
   end
 
   local no_vibe_txt = require("novibe.no_vibe").load(filename)
-  local config      = require("novibe.config")
-  local providers   = require("novibe.providers")
-  local profile     = config.options.active_consult_profile or config.options.active_profile
-  local provider    = providers.get(profile and profile.provider)
-  local bin         = provider.find_bin()
 
-  if not bin then
-    vim.notify("novibe: " .. provider.name .. " binary not found", vim.log.levels.ERROR)
-    return
-  end
-
-  -- Build system prompt: novibe format explanation + file context + matched conventions
   local parts = {}
 
   table.insert(parts, [[
@@ -87,7 +76,25 @@ The matched sections for the current file are included below. You should underst
     table.insert(parts, "\nNo project conventions found for this file.")
   end
 
-  local seed = table.concat(parts, "\n")
+  return table.concat(parts, "\n")
+end
+
+-- line1/line2/has_range: passed from command range (:'<,'>NovibeConsult)
+function M.open(line1, line2, has_range)
+  cleanup()
+
+  local config      = require("novibe.config")
+  local providers   = require("novibe.providers")
+  local profile     = config.options.active_consult_profile or config.options.active_profile
+  local provider    = providers.get(profile and profile.provider)
+  local bin         = provider.find_bin()
+
+  if not bin then
+    vim.notify("novibe: " .. provider.name .. " binary not found", vim.log.levels.ERROR)
+    return
+  end
+
+  local seed = build_seed(line1, line2, has_range)
 
   local provider_name = provider.name
 
@@ -169,6 +176,25 @@ The matched sections for the current file are included below. You should underst
   })
 
   vim.cmd("startinsert")
+end
+
+-- Build the seed from the current buffer/selection and chansend it into the
+-- active consult terminal (intended for opencode, which has no CLI flag for
+-- pre-seeding context). User presses Enter manually to submit.
+function M.send_prompt(line1, line2, has_range)
+  if not state.job or not state.buf or not vim.api.nvim_buf_is_valid(state.buf) then
+    vim.notify("novibe: no active consult session — run :NovibeConsult first", vim.log.levels.WARN)
+    return
+  end
+  if vim.api.nvim_get_current_buf() == state.buf then
+    vim.notify("novibe: run :NovibeConsultPrompt from the source buffer, not the consult terminal", vim.log.levels.WARN)
+    return
+  end
+  local seed = build_seed(line1, line2, has_range)
+  -- Strip trailing newlines so the TUI doesn't auto-submit; user hits Enter.
+  seed = seed:gsub("[\r\n]+$", "")
+  pcall(vim.api.nvim_chan_send, state.job, seed)
+  vim.notify("novibe: prompt sent to consult — press Enter in the terminal to submit", vim.log.levels.INFO)
 end
 
 return M
