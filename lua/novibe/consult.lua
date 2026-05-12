@@ -115,6 +115,8 @@ function M.open(line1, line2, has_range)
     vim.list_extend(cmd, { "--append-system-prompt", seed })
   end
 
+  local prev_win = vim.api.nvim_get_current_win()
+
   -- Open terminal in a horizontal split below; close split on exit
   local function restore()
     vim.schedule(function()
@@ -175,7 +177,14 @@ function M.open(line1, line2, has_range)
     end,
   })
 
-  vim.cmd("startinsert")
+  if provider_name == "opencode" then
+    -- Return focus to source window so user can immediately run :NovibeConsultPrompt
+    if vim.api.nvim_win_is_valid(prev_win) then
+      vim.api.nvim_set_current_win(prev_win)
+    end
+  else
+    vim.cmd("startinsert")
+  end
 end
 
 -- Build the seed from the current buffer/selection and chansend it into the
