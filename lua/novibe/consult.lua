@@ -36,8 +36,9 @@ function M.open(line1, line2, has_range)
 
   local no_vibe_txt = require("novibe.no_vibe").load(filename)
   local config      = require("novibe.config")
-  local novibe      = require("novibe")
-  local provider    = novibe.active_provider()
+  local providers   = require("novibe.providers")
+  local profile     = config.options.active_consult_profile or config.options.active_profile
+  local provider    = providers.get(profile and profile.provider)
   local bin         = provider.find_bin()
 
   if not bin then
@@ -88,8 +89,7 @@ The matched sections for the current file are included below. You should underst
 
   local seed = table.concat(parts, "\n")
 
-  local profile       = config.options.active_consult_profile or config.options.active_profile
-  local provider_name = (profile and profile.provider) or "claude"
+  local provider_name = provider.name
 
   local cmd
   if provider_name == "opencode" then
