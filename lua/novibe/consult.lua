@@ -183,6 +183,7 @@ function M.open(line1, line2, has_range)
       vim.api.nvim_set_current_win(prev_win)
     end
     vim.defer_fn(function()
+      vim.notify("novibe: auto-sending consult prompt to opencode…", vim.log.levels.INFO)
       M.send_prompt(line1, line2, has_range)
     end, 3000)
   else
@@ -205,8 +206,12 @@ function M.send_prompt(line1, line2, has_range)
   local seed = build_seed(line1, line2, has_range)
   -- Strip trailing newlines so the TUI doesn't auto-submit; user hits Enter.
   seed = seed:gsub("[\r\n]+$", "")
-  pcall(vim.api.nvim_chan_send, state.job, seed)
-  vim.notify("novibe: prompt sent to consult — press Enter in the terminal to submit", vim.log.levels.INFO)
+  local ok, err = pcall(vim.api.nvim_chan_send, state.job, seed)
+  if ok then
+    vim.notify("novibe: prompt sent to consult — press Enter in the terminal to submit", vim.log.levels.INFO)
+  else
+    vim.notify("novibe: chan_send failed — " .. tostring(err), vim.log.levels.ERROR)
+  end
 end
 
 return M
