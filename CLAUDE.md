@@ -18,7 +18,7 @@ lua/novibe/
   chat.lua     — multi-turn follow-up float: renders diff proposals, local confirm, schema reminder
   apply.lua    — content-based find-and-replace across files (two-pass: strict then lenient)
   glob.lua     — glob → Lua pattern conversion + section header matching
-  no_vibe.lua  — loads NO_VIBE.md + .no_vibe/convention-*.md + .no_vibe/learned-*.md, filters by filename
+  no_vibe.lua  — loads NO_VIBE.md + .no_vibe/convention-*.md + .no_vibe/learned-*.md + knowledge base (map/rule/decision), filters by filename; stale detection via git log
   learn.lua    — #teach diff capture (.no_vibe/diffs.json) + distillation into learned-*.md topic files
   consult.lua  — singleton interactive consult: opens in current window, seeds file/line/selection/conventions; supports claude and opencode TUI
 plugin/
@@ -43,7 +43,7 @@ Visual select skeleton (or cursor on line)
 ## Commands
 
 - `:NovibeAct` — act on current line or explicit range (e.g. `:'<,'>NovibeAct`); input float accepts free-form instruction, or `#teach <reason>` to accumulate evidence (diff if editing a recent fill, otherwise a direct rule note)
-- `:NovibeConsult` — open singleton interactive session in a vertical split; process is killed when buffer closes; `<Esc><Esc>` exits terminal mode; range `:'<,'>NovibeConsult` injects the selection. Context (file, line, selection, matched `.no_vibe` sections, novibe format explanation, consult-only enforcement) is injected via `--append-system-prompt` for **claude**, `--prompt-interactive` for **gemini**. **opencode workaround:** no CLI flag exists, so use `:NovibeConsultPrompt` after the session is open — the seed is `chansend`-ed straight into opencode's input box; press Enter to submit.
+- `:NovibeConsult` — open singleton interactive session in a vertical split; process is killed when buffer closes; `<Esc><Esc>` exits terminal mode; range `:'<,'>NovibeConsult` injects the selection. Seed includes: file, line, current git commit hash, matched `.no_vibe` sections (conventions, learned, and knowledge base), and snapshot instructions. Injected via `--append-system-prompt` for **claude**, `--prompt-interactive` for **gemini**. The AI may freely edit `CLAUDE.md` and all `.no_vibe/*.md` files; all other file modifications are off-limits. Say **"snapshot"** mid-session to have the AI write discoveries to the knowledge base. **opencode workaround:** no CLI flag exists, so use `:NovibeConsultPrompt` after the session is open — the seed is `chansend`-ed straight into opencode's input box; press Enter to submit.
 - `:NovibeConsultPrompt` — build the consult seed from the current buffer/selection and chansend it into the active consult terminal. Required for opencode (which cannot receive context via CLI); also works with claude/gemini if you want to push fresh context mid-session. Must be invoked from the source buffer, not the consult terminal.
 - `:NovibeProfile` — two-step picker: choose slot (Act / Consult), then profile. Each slot persists independently. No profile = CLI defaults.
 - `:NovibeDistill` — distill accumulated diffs from `#teach` into topic-organized `.no_vibe/learned-*.md` files (Claude decides the topic split)
@@ -150,29 +150,56 @@ Never uses line numbers. Two-pass approach:
 - `insert_after` — find anchor, insert new code after it
 - `insert_before` — find anchor, insert new code before it
 
-## Convention & Learned Rule Files
+## Convention, Learned Rule & Knowledge Base Files
 
-Three sources of project rules. Plugin walks up from `cwd` to find any of them, then filters all sections by current filename before appending to the prompt — Claude never receives the full content, only matching sections.
+Plugin walks up from `cwd` to find any of these, then filters all sections by current filename before appending to the prompt — AI never receives the full content, only matching sections. Both `:NovibeAct` and `:NovibeConsult` benefit from all layers.
 
 Load order (concatenated in this order):
 1. `NO_VIBE.md` at project root — single-file shortcut for simple projects, still supported
-2. `.no_vibe/convention-*.md` (sorted) — human-written. Any number of files, named freely after the `convention-` prefix. Users split however suits the project (topic, layer, ownership — their call).
-3. `.no_vibe/learned-*.md` (sorted) — auto-distilled by `:NovibeDistill` from `#teach` diffs; topic split decided by Claude (`learned-style.md`, `learned-react.md`, etc.)
+2. `.no_vibe/convention-*.md` (sorted) — human-written coding rules, split by topic
+3. `.no_vibe/learned-*.md` (sorted) — auto-distilled by `:NovibeDistill` from `#teach` diffs
+4. `.no_vibe/map-*.md` (sorted) — **dependency graph**: call chains, inheritance, who depends on what
+5. `.no_vibe/rule-*.md` (sorted) — **behavioral constraints**: how to interact with each area (e.g. "always use Class X as db proxy")
+6. `.no_vibe/decision-*.md` (sorted) — **architectural ADRs**: the why behind decisions and rejected alternatives
 
 All files use the same section format:
 ```markdown
 ## always
 rules that apply to every file
 
+## src/db/**
+knowledge about the db layer — loaded when working in src/db/
+
 ## *.tsx, *.jsx
 rules for React components
-
-## use*.ts
-rules for React hooks
 ```
 
 Header is a comma-separated list of glob patterns (`*` = any non-separator, `**` = any path).
 Special header `always` always loads regardless of filename.
+
+### Knowledge Base: Stale Detection
+
+`map-*`, `rule-*`, and `decision-*` sections support a `<!-- last-verified: HASH -->` comment that records the git commit when the knowledge was written:
+
+```markdown
+## src/db/**
+<!-- last-verified: a3f9c2b -->
+All db interactions go through Class X as proxy (src/db/proxy.ts).
+Class Z extends Class K for auth-specific behavior.
+```
+
+When loading, `no_vibe.lua` runs `git log HASH..HEAD -- <path>` for directory-style section headers. If the area has new commits since the hash, the section is prefixed with `⚠ STALE: N commit(s) since HASH — verify before trusting.`
+
+### Knowledge Base: Snapshot Workflow
+
+Built exclusively during `:NovibeConsult`. Say **"snapshot"** whenever you discover something worth keeping — the AI writes it to the right file with the current commit hash. The knowledge base grows lazily as you explore the codebase, focused on areas you actually touch.
+
+Three file types, each covering a different concern:
+- `map-<area>.md` — structural: dependency chains, call graphs, inheritance
+- `rule-<area>.md` — behavioral: constraints on how to interact with an area
+- `decision-<area>.md` — reasoning: why something was built a certain way, what was rejected
+
+Keep entries concise — the goal is a pointer to what matters, not a copy of the code.
 
 ## #teach / Distillation Flow
 

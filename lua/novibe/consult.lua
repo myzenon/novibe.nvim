@@ -35,28 +35,45 @@ local function build_seed(line1, line2, has_range)
   end
 
   local no_vibe_txt = require("novibe.no_vibe").load(filename)
+  local commit = vim.trim(vim.fn.system("git rev-parse HEAD 2>/dev/null"))
+  if not commit:match("^[%x]+$") then commit = nil end
 
   local parts = {}
 
   table.insert(parts, [[
-This is a CONSULT-ONLY session. You must NOT modify any files, write any code to disk, run shell commands, or use any tools that change the filesystem. Your role is purely advisory — discuss, explain, review, and answer questions. If the user asks you to make a change, explain what the change would be instead of doing it.
+This is a CONSULT session. Your role is primarily advisory — discuss, explain, review, and answer questions.
 
-You are assisting a developer who uses novibe.nvim — a Neovim plugin where the user writes code skeletons and has an AI fill them in place.
+FILE WRITING RULES:
+- You MAY freely edit these files when the user asks:
+    CLAUDE.md, .no_vibe/convention-*.md, .no_vibe/learned-*.md
+    .no_vibe/map-*.md, .no_vibe/rule-*.md, .no_vibe/decision-*.md
+- For ALL other files: do NOT modify them, write code to disk, or run shell commands.
 
-Project conventions are stored in one of three places (loaded in this order):
-- `NO_VIBE.md` at the project root — single-file shortcut for simple projects
-- `.no_vibe/convention-*.md` — human-written rules, split by topic
-- `.no_vibe/learned-*.md` — auto-distilled from the user's edits via `#teach`
+KNOWLEDGE BASE — when the user says "snapshot", "save this", or "remember this":
+Write what was just discovered to the appropriate .no_vibe/ file:
+  map-<area>.md     — dependency graph: who depends on what, call chains, inheritance
+  rule-<area>.md    — behavioral constraints: how to interact with each area (e.g. "always use Class X as proxy")
+  decision-<area>.md — the WHY: architectural decisions and rejected alternatives
 
-Each file uses section headers that are glob patterns:
-  ## always          → applies to every file
-  ## *.tsx, *.jsx    → applies when filename matches
-  ## use*.ts         → applies to React hooks
+Each file uses glob section headers so only relevant sections load per file:
+  ## always              → always injected
+  ## src/db/**           → injected when working in src/db/
+  ## src/routes/routeA/** → injected when working in that route
 
-The matched sections for the current file are included below. You should understand and reference these conventions when helping the user.]])
+In each section you write, include a last-verified comment with the current commit hash:
+  <!-- last-verified: COMMIT_HASH -->
+
+This lets the system warn the user if that area of the codebase has changed since the knowledge was written.
+
+EXISTING KNOWLEDGE — sections below marked ⚠ STALE mean that area has new commits since the knowledge was written. Treat stale sections as hints only — verify against the actual code before relying on them.
+
+Project conventions (.no_vibe/convention-*.md and .no_vibe/learned-*.md) use the same section format and are also injected below.]])
 
   if filename ~= "" then
     table.insert(parts, "\nCurrent file: " .. vim.fn.fnamemodify(filename, ":.") .. " (line " .. cursor[1] .. ")")
+  end
+  if commit then
+    table.insert(parts, "Current commit: " .. commit)
   end
   if selection and selection ~= "" then
     table.insert(parts, "\nSelected code:\n```\n" .. selection .. "\n```")
