@@ -470,12 +470,26 @@ function M.open_fill(pending, opts)
     pending_changes = response.changes or {}
     set_content(pending_code, response)
     set_winbar(response.done and TITLE_DONE or TITLE_IDLE)
-    -- focus: normal mode → move to fill window; insert mode → notify
+    -- if changes proposed, scroll to show them and warn the user
+    if #pending_changes > 0 and vim.api.nvim_win_is_valid(win) then
+      local all = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+      for i, l in ipairs(all) do
+        if l:match("^┌─") then
+          vim.api.nvim_win_set_cursor(win, { i, 0 })
+          break
+        end
+      end
+      vim.notify(
+        string.format("novibe: AI proposed %d out-of-scope change(s) — review in the fill chat, then <CR> to apply all or ask to revise", #pending_changes),
+        vim.log.levels.WARN
+      )
+    end
+
+    -- focus: normal mode → move to fill window (stay normal so <CR> works immediately)
+    -- insert mode → notify, user navigates manually
     local mode = vim.api.nvim_get_mode().mode
     if mode == "n" and vim.api.nvim_win_is_valid(win) then
       vim.api.nvim_set_current_win(win)
-      vim.api.nvim_win_set_cursor(win, { vim.api.nvim_buf_line_count(buf), 0 })
-      vim.cmd("startinsert")
     else
       vim.notify("novibe: fill ready — navigate to preview and press <CR> to apply", vim.log.levels.INFO)
     end
