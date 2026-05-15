@@ -308,6 +308,7 @@ function M.fill(line1, line2)
       bare         = config.options.bare,
       use_continue = carry,
       session_id   = carry and M._opencode_session_id or nil,
+      stream       = provider.streaming,
     })
 
     -- streaming state: accumulated raw stdout + model text for progressive code splice

@@ -1,6 +1,7 @@
 local M = {}
 
 M.name = "claude"
+M.streaming = true
 
 function M.find_bin()
   local found = vim.fn.exepath("claude")
@@ -15,7 +16,27 @@ function M.find_bin()
   return nil
 end
 
--- opts: { profile, bare, use_continue }
+-- Called once per stdout data chunk in streaming mode.
+-- Returns text extracted from content_block_delta events (deltas, not cumulative).
+function M.parse_chunk(data)
+  local parts = {}
+  for _, line in ipairs(vim.split(data, "\n", { plain = true })) do
+    if line ~= "" then
+      local ok, ev = pcall(vim.json.decode, line)
+      if ok and type(ev) == "table" and ev.type == "stream_event"
+         and type(ev.event) == "table"
+         and ev.event.type == "content_block_delta"
+         and type(ev.event.delta) == "table"
+         and ev.event.delta.type == "text_delta"
+         and type(ev.event.delta.text) == "string" then
+        table.insert(parts, ev.event.delta.text)
+      end
+    end
+  end
+  return table.concat(parts)
+end
+
+-- opts: { profile, bare, use_continue, stream }
 function M.build_cmd(bin, prompt, opts)
   local cmd = { bin }
   if opts.bare then table.insert(cmd, "--bare") end
@@ -26,7 +47,11 @@ function M.build_cmd(bin, prompt, opts)
     vim.list_extend(cmd, { "--effort", opts.profile.effort })
   end
   if opts.use_continue then table.insert(cmd, "--continue") end
-  vim.list_extend(cmd, { "--output-format", "json", "--print", prompt })
+  if opts.stream then
+    vim.list_extend(cmd, { "--output-format", "stream-json", "--include-partial-messages", "--verbose", "--print", prompt })
+  else
+    vim.list_extend(cmd, { "--output-format", "json", "--print", prompt })
+  end
   return cmd
 end
 
@@ -55,21 +80,7 @@ local function extract_json(s)
   return nil
 end
 
--- Returns response, usage. Usage may be nil if envelope missing.
-function M.parse_output(stdout)
-  local raw = vim.trim(stdout)
-  local ok, outer = pcall(vim.json.decode, raw)
-  if not ok then
-    local extracted = extract_json(raw)
-    if extracted then return extracted, nil end
-    return { code = raw, changes = {}, message = nil, done = true }, nil
-  end
-
-  -- plain novibe JSON (no envelope)
-  if outer.result == nil then
-    return outer, nil
-  end
-
+local function parse_envelope(outer)
   local usage = {
     cost_usd       = outer.total_cost_usd,
     input_tokens   = outer.usage and outer.usage.input_tokens,
@@ -82,14 +93,42 @@ function M.parse_output(stdout)
       if mu.contextWindow then usage.context_window = mu.contextWindow; break end
     end
   end
-
   local inner_raw = type(outer.result) == "string" and outer.result or ""
-  local ok2, response = pcall(vim.json.decode, inner_raw)
-  if not ok2 then
+  local ok, response = pcall(vim.json.decode, inner_raw)
+  if not ok then
     response = extract_json(inner_raw) or { code = inner_raw, changes = {}, message = nil, done = true }
   end
-
   return response, usage
+end
+
+-- Returns response, usage. Handles both --output-format json (single object)
+-- and --output-format stream-json (newline-delimited events with a result line).
+function M.parse_output(stdout)
+  local raw = vim.trim(stdout)
+
+  -- stream-json path: scan for the result event line
+  if raw:find('"type"', 1, true) then
+    for _, line in ipairs(vim.split(raw, "\n", { plain = true })) do
+      if line ~= "" then
+        local ok, ev = pcall(vim.json.decode, line)
+        if ok and type(ev) == "table" and ev.type == "result" then
+          return parse_envelope(ev)
+        end
+      end
+    end
+  end
+
+  -- json path: single JSON object
+  local ok, outer = pcall(vim.json.decode, raw)
+  if not ok then
+    local extracted = extract_json(raw)
+    if extracted then return extracted, nil end
+    return { code = raw, changes = {}, message = nil, done = true }, nil
+  end
+  if outer.result == nil then
+    return outer, nil
+  end
+  return parse_envelope(outer)
 end
 
 return M

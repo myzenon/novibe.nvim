@@ -1,6 +1,7 @@
 local M = {}
 
 M.name = "gemini"
+M.streaming = true
 
 function M.find_bin()
   local found = vim.fn.exepath("gemini")
@@ -15,12 +16,30 @@ function M.find_bin()
   return nil
 end
 
--- opts: { profile, session_id }
+-- Called once per stdout data chunk in streaming mode.
+-- Returns text from assistant delta message events.
+function M.parse_chunk(data)
+  local parts = {}
+  for _, line in ipairs(vim.split(data, "\n", { plain = true })) do
+    if line ~= "" then
+      local ok, ev = pcall(vim.json.decode, line)
+      if ok and type(ev) == "table" and ev.type == "message"
+         and ev.role == "assistant" and ev.delta == true
+         and type(ev.content) == "string" then
+        table.insert(parts, ev.content)
+      end
+    end
+  end
+  return table.concat(parts)
+end
+
+-- opts: { profile, session_id, stream }
 -- gemini has no --bare or --continue; session continuity uses --session-id.
 -- Workspace must be trusted (run `gemini` interactively once and trust the dir,
 -- or set GEMINI_CLI_TRUST_WORKSPACE=true).
 function M.build_cmd(bin, prompt, opts)
-  local cmd = { bin, "--output-format", "json" }
+  local fmt = opts.stream and "stream-json" or "json"
+  local cmd = { bin, "--output-format", fmt }
   if opts.profile and opts.profile.model then
     vim.list_extend(cmd, { "--model", opts.profile.model })
   end
@@ -31,62 +50,70 @@ function M.build_cmd(bin, prompt, opts)
   return cmd
 end
 
--- gemini --output-format json emits a single JSON object:
---   { "session_id": "...", "response": "...", "stats": { "models": { ... } } }
-function M.parse_output(stdout)
-  -- stdout may have warning lines before the JSON block; find first { to last }
-  local raw = vim.trim(stdout)
-  local i = raw:find("{")
-  local last_j = nil
-  if i then
-    local pos = i
+local function unwrap_and_parse(text)
+  text = text:gsub("^```[%w]*\n?", ""):gsub("\n?```%s*$", "")
+  text = vim.trim(text)
+  local ok, parsed = pcall(vim.json.decode, text)
+  if ok and type(parsed) == "table" then return parsed end
+  local ji, jj = text:find("{"), nil
+  if ji then
+    local pos = ji
     while true do
-      local found = raw:find("}", pos, true)
+      local found = text:find("}", pos, true)
       if not found then break end
-      last_j = found
-      pos = found + 1
+      jj = found; pos = found + 1
     end
   end
+  if ji and jj then
+    local ok2, r = pcall(vim.json.decode, text:sub(ji, jj))
+    if ok2 and type(r) == "table" then return r end
+  end
+  return { code = text, changes = {}, message = nil, done = true }
+end
 
-  local outer_raw = (i and last_j) and raw:sub(i, last_j) or raw
-  local ok, outer = pcall(vim.json.decode, outer_raw)
+-- Handles both --output-format json (single object) and stream-json (delta events).
+function M.parse_output(stdout)
+  local raw = vim.trim(stdout)
+
+  -- stream-json path: lines with type field (init / message / result events)
+  local first_line = raw:match("^[^\n]+")
+  local ok0, first_ev = pcall(vim.json.decode, first_line or "")
+  if ok0 and type(first_ev) == "table" and first_ev.type then
+    local text_parts = {}
+    local session_id, stats = nil, nil
+    for _, line in ipairs(vim.split(raw, "\n", { plain = true })) do
+      if line ~= "" then
+        local ok, ev = pcall(vim.json.decode, line)
+        if ok and type(ev) == "table" then
+          session_id = session_id or ev.session_id
+          if ev.type == "message" and ev.role == "assistant" and ev.delta == true then
+            table.insert(text_parts, ev.content or "")
+          elseif ev.type == "result" then
+            stats = ev.stats
+          end
+        end
+      end
+    end
+    local response = unwrap_and_parse(vim.trim(table.concat(text_parts)))
+    local in_tokens, out_tokens = nil, nil
+    if stats then
+      in_tokens  = stats.input_tokens
+      out_tokens = stats.output_tokens
+    end
+    return response, {
+      cost_usd = nil, input_tokens = in_tokens, output_tokens = out_tokens,
+      context_window = nil, session_id = session_id,
+    }
+  end
+
+  -- json path: single object { session_id, response, stats }
+  local ok, outer = pcall(vim.json.decode, raw)
   if not ok or type(outer) ~= "table" then
     return { code = raw, changes = {}, message = nil, done = true }, nil
   end
 
-  local session_id = outer.session_id
+  local response = unwrap_and_parse(type(outer.response) == "string" and outer.response or "")
 
-  -- parse response field as novibe JSON
-  local response_text = type(outer.response) == "string" and vim.trim(outer.response) or ""
-  response_text = response_text:gsub("^```[%w]*\n?", ""):gsub("\n?```%s*$", "")
-  response_text = vim.trim(response_text)
-
-  local ok2, response = pcall(vim.json.decode, response_text)
-  if not ok2 or type(response) ~= "table" then
-    -- try extracting JSON from prose-wrapped response
-    local ji = response_text:find("{")
-    local jj = nil
-    if ji then
-      local pos = ji
-      while true do
-        local found = response_text:find("}", pos, true)
-        if not found then break end
-        jj = found
-        pos = found + 1
-      end
-    end
-    if ji and jj then
-      local ok3, r3 = pcall(vim.json.decode, response_text:sub(ji, jj))
-      if ok3 and type(r3) == "table" then
-        response = r3
-      end
-    end
-    if not response then
-      response = { code = response_text, changes = {}, message = nil, done = true }
-    end
-  end
-
-  -- aggregate token counts across all models used
   local in_tokens, out_tokens = nil, nil
   if outer.stats and outer.stats.models then
     for _, m in pairs(outer.stats.models) do
@@ -97,15 +124,10 @@ function M.parse_output(stdout)
     end
   end
 
-  local usage = {
-    cost_usd       = nil,  -- gemini free tier reports no cost
-    input_tokens   = in_tokens,
-    output_tokens  = out_tokens,
-    context_window = nil,
-    session_id     = session_id,
+  return response, {
+    cost_usd = nil, input_tokens = in_tokens, output_tokens = out_tokens,
+    context_window = nil, session_id = outer.session_id,
   }
-
-  return response, usage
 end
 
 return M
