@@ -16,6 +16,13 @@ local function is_confirm(text)
   return CONFIRM[vim.trim(text):lower()] ~= nil
 end
 
+-- AI/JSON parsers may yield vim.NIL or non-tables here; coerce to a real list
+-- so `#changes` and `ipairs(changes)` behave as expected downstream.
+local function normalize_changes(c)
+  if type(c) ~= "table" then return {} end
+  return c
+end
+
 local function split_width()
   -- 40% of editor width, clamped to a comfortable reading range
   return math.min(math.max(math.floor(vim.o.columns * 0.4), 50), 90)
@@ -88,7 +95,7 @@ function M.open(initial_response, opts)
   local provider   = opts.provider
   local session_id = opts.session_id
   -- store changes so confirmations can apply locally without a round-trip
-  local pending_changes = initial_response.changes or {}
+  local pending_changes = normalize_changes(initial_response.changes)
 
   local ns  = vim.api.nvim_create_namespace("novibe_chat")
   local buf = vim.api.nvim_create_buf(false, true)
@@ -240,9 +247,8 @@ function M.open(initial_response, opts)
           end
         end
 
-        if response.changes and #response.changes > 0 then
-          pending_changes = response.changes
-        end
+        local new_changes = normalize_changes(response.changes)
+        if #new_changes > 0 then pending_changes = new_changes end
 
         local new_lines, new_hls = render(response, inner_width())
         set_content(new_lines, new_hls)
@@ -277,10 +283,18 @@ end
 
 -- Open the fill-preview chat. Returns { push, finalize, cancel }.
 --   push(partial)       — update displayed code during streaming (no input yet)
---   finalize(resp, use) — streaming done; show final code + enable input
+--   finalize(resp, use) — streaming done; build question queue, render Q1
 --   cancel()            — close without applying (on error)
 -- pending: { bufnr, start_line, end_line, on_apply(code) }
 -- opts:    { bin, provider, session_id, on_session_update(sid) }
+--
+-- After finalize, the AI response is split into a queue of "questions":
+--   1. In-scope code (if any)  — apply replaces the original selection
+--   2..N. Each out-of-scope change — apply runs apply.apply_all on that one
+-- Exactly ONE question is rendered at a time, with a "[k/N]" indicator in the
+-- winbar. <CR> applies the head; `s` skips it; `:w <text>` asks the AI to
+-- revise (the response replaces the remaining queue); `:w all` applies every
+-- remaining question and closes; `q` quits.
 function M.open_fill(pending, opts)
   local bin      = opts.bin
   local provider = opts.provider
@@ -316,10 +330,16 @@ function M.open_fill(pending, opts)
 
   local done            = false
   local finalized       = false
-  local pending_code    = nil
-  local pending_changes = {}
-  local current_job     = nil
   local sending_enabled = false
+  local current_job     = nil
+  -- Queue of pending questions. Each item is one of:
+  --   { type = "code",   code = "..." }     — replaces the original selection
+  --   { type = "change", change = {...} }   — one apply.lua change spec
+  local questions       = {}
+  local total           = 0    -- denominator for "[k/N]" display; resets on AI revision
+  local last_message    = nil  -- AI's last `response.message`, rendered above the current Q
+
+  local function current_idx() return total - #questions + 1 end
 
   local function inner_w()
     return vim.api.nvim_win_is_valid(win) and (vim.api.nvim_win_get_width(win) - 2) or 60
@@ -332,40 +352,72 @@ function M.open_fill(pending, opts)
     if vim.api.nvim_win_is_valid(win) then vim.api.nvim_win_close(win, true) end
   end
 
-  -- Render code + optional message/changes into buffer with MARKER below
-  local function set_content(code, response)
+  -- Render the head-of-queue question + MARKER + reply area. Cursor lands at
+  -- the reply area so the user can <CR> apply or `i` to type a revision.
+  local function render_q()
+    if done then return end
+    local q = questions[1]
+    if not q then close(); return end
+
+    local idx = current_idx()
     local lines, hls = {}, {}
     local function push(line, hl)
       table.insert(lines, line)
       if hl then table.insert(hls, { #lines - 1, hl }) end
     end
-    if code then
-      for _, l in ipairs(vim.split(code, "\n", { plain = true })) do push(l) end
+
+    -- Render the AI's latest message inline above the current question so
+    -- clarifying questions ("which FlexBox?") aren't lost in the notification log.
+    if last_message and last_message ~= "" then
+      local bar = "─ AI ─"
+      push(bar .. string.rep("─", math.max(0, inner_w() - #bar - 1)), "Comment")
+      for _, l in ipairs(vim.split(last_message, "\n", { plain = true })) do
+        push("  " .. l, "DiagnosticInfo")
+      end
+      push(string.rep("─", inner_w() - 1), "Comment")
       push("")
     end
-    if response then
-      local msg = response.message
-      if msg and msg ~= vim.NIL and msg ~= "" then
-        for _, l in ipairs(vim.split(msg, "\n", { plain = true })) do push(l) end
-        push("")
+
+    if q.type == "code" then
+      push(string.format("[%d/%d] In-scope code (will replace your selection):", idx, total), "Title")
+      push("")
+      for _, l in ipairs(vim.split(q.code or "", "\n", { plain = true })) do push(l) end
+      set_winbar(string.format(
+        "%%#Title# novibe [%d/%d] %%#Normal# in-scope  ·  <CR> apply  ·  s skip  ·  :w revise  ·  q quit",
+        idx, total
+      ))
+    else
+      local ch = q.change
+      push(string.format("[%d/%d] Out-of-scope: %s  [%s]",
+        idx, total, ch.file or "?", ch.action or "replace"), "Title")
+      -- Surface hallucinated file paths up-front so the user doesn't waste a
+      -- <CR> on something apply.lua will reject.
+      local abs = ch.file and vim.fn.fnamemodify(ch.file, ":p") or ""
+      if ch.file and ch.file ~= "" and vim.fn.filereadable(abs) == 0 then
+        push("│  ⚠ file does not exist — likely a hallucinated path. Revise with :w or skip with `s`.", "DiagnosticError")
       end
-      local iw = inner_w()
-      for i, ch in ipairs(response.changes or {}) do
-        local num = #response.changes > 1 and string.format("[%d/%d] ", i, #response.changes) or ""
-        push("┌─ " .. num .. ch.file .. "  [" .. (ch.action or "replace") .. "]", "Title")
+      if ch.description and ch.description ~= "" then
         push("│  " .. ch.description, "Comment")
-        push("│")
+      end
+      push("│")
+      if ch.find and ch.find ~= "" then
         for _, l in ipairs(vim.split(vim.trim(ch.find), "\n", { plain = true })) do
           push("  - " .. l, "DiffDelete")
         end
+      end
+      if ch.replace and ch.replace ~= "" then
         for _, l in ipairs(vim.split(vim.trim(ch.replace), "\n", { plain = true })) do
           push("  + " .. l, "DiffAdd")
         end
-        push("└" .. string.rep("─", iw - 2), "Comment")
-        push("")
       end
+      push("└" .. string.rep("─", inner_w() - 2), "Comment")
+      set_winbar(string.format(
+        "%%#WarningMsg# [%d/%d] out-of-scope %%#Normal# ·  <CR> apply  ·  s skip  ·  :w revise  ·  :w all  ·  q quit",
+        idx, total
+      ))
     end
-    local content = vim.list_extend(vim.deepcopy(lines), { MARKER, "" })
+
+    local content = vim.list_extend(vim.deepcopy(lines), { "", MARKER, "" })
     vim.bo[buf].modifiable = true
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, content)
     vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
@@ -398,15 +450,52 @@ function M.open_fill(pending, opts)
     return function() timer:stop(); timer:close() end
   end
 
+  -- Apply one question. Returns true on success; false (+ notify) on failure
+  -- so confirm() can stay on the question instead of silently advancing.
+  local function apply_q(q)
+    if q.type == "code" then
+      if not (q.code and vim.api.nvim_buf_is_valid(pending.bufnr)) then
+        vim.notify("novibe: working buffer is gone — cannot apply code", vim.log.levels.ERROR)
+        return false
+      end
+      local new_lines = vim.split(q.code, "\n", { plain = true })
+      vim.api.nvim_buf_set_lines(pending.bufnr, pending.start_line - 1, pending.end_line, false, new_lines)
+      if opts.on_apply then opts.on_apply(q.code) end
+      return true
+    else
+      -- Use apply.apply directly so we can see the per-change error.
+      local ok, err = apply.apply(q.change)
+      if not ok then
+        vim.notify(
+          "novibe: could not apply this change — " .. (err or "unknown error")
+          .. ".\nThe buffer may have changed since the AI proposed this. Revise with :w <feedback>, or skip with `s`.",
+          vim.log.levels.ERROR
+        )
+        return false
+      end
+      vim.notify("novibe: applied change in " .. (q.change.file or "?"), vim.log.levels.INFO)
+      return true
+    end
+  end
+
+  -- Apply head-of-queue; if apply fails, stay on this question.
   local function confirm()
     if done or not finalized then return end
-    if pending_code and vim.api.nvim_buf_is_valid(pending.bufnr) then
-      local new_lines = vim.split(pending_code, "\n", { plain = true })
-      vim.api.nvim_buf_set_lines(pending.bufnr, pending.start_line - 1, pending.end_line, false, new_lines)
-      if opts.on_apply then opts.on_apply(pending_code) end
-    end
-    if #pending_changes > 0 then apply.apply_all(pending_changes) end
-    close()
+    local q = questions[1]
+    if not q then close(); return end
+    if not apply_q(q) then return end  -- stay; user can revise or skip
+    table.remove(questions, 1)
+    last_message = nil  -- previous AI message was about the just-applied Q
+    if #questions == 0 then close() else render_q() end
+  end
+
+  -- Skip head-of-queue (don't apply); advance.
+  local function skip()
+    if done or not finalized then return end
+    if #questions == 0 then close(); return end
+    table.remove(questions, 1)
+    last_message = nil
+    if #questions == 0 then close() else render_q() end
   end
 
   local function send()
@@ -414,8 +503,43 @@ function M.open_fill(pending, opts)
     local reply = extract_reply()
     if is_confirm(reply) then confirm(); return end
 
+    -- ":w all" / ":w *" — apply EVERY remaining question in order. If one
+    -- fails, stop on it so the user can revise or skip.
+    if #questions > 0 then
+      local trimmed = vim.trim(reply):lower()
+      if trimmed == "all" or trimmed == "*" then
+        while #questions > 0 do
+          if not apply_q(questions[1]) then render_q(); return end
+          table.remove(questions, 1)
+        end
+        close()
+        return
+      end
+    end
+
     local stop = fill_spinner()
-    local hint = '\n\n[Respond ONLY in JSON: {"code":...,"message":...,"changes":[...],"done":true/false}]'
+    local cur_q = questions[1]
+    -- Anchor the AI to the question the user is reacting to.
+    local hint
+    if cur_q and cur_q.type == "code" then
+      hint = '\n\n[User is reviewing the in-scope code. Their feedback below should revise the code (you may also revise the out-of-scope changes). Respond ONLY in JSON: {"code":...,"message":...,"changes":[...],"done":true/false}]'
+    elseif cur_q and cur_q.type == "change" then
+      local ch = cur_q.change
+      local abs = ch.file and vim.fn.fnamemodify(ch.file, ":p") or ""
+      local exists_note = ""
+      if ch.file and ch.file ~= "" and vim.fn.filereadable(abs) == 0 then
+        exists_note = string.format(
+          ' IMPORTANT: the path "%s" does NOT exist in this project — you likely hallucinated it. Use a path that actually exists, or drop this change.',
+          ch.file
+        )
+      end
+      hint = string.format(
+        '\n\n[Code already applied to the buffer. User is reviewing this out-of-scope change: file=%s, action=%s. Description: %s.%s Their feedback below applies to this change. Respond ONLY with revised changes JSON: {"message":...,"changes":[...],"done":true/false}. Do NOT include a "code" field.]',
+        ch.file or "?", ch.action or "replace", ch.description or "", exists_note
+      )
+    else
+      hint = '\n\n[Respond ONLY in JSON: {"code":...,"message":...,"changes":[...],"done":true/false}]'
+    end
     local cmd = provider.build_cmd(bin, (reply ~= "" and reply or "continue") .. hint, {
       profile = nil, bare = false, use_continue = true, session_id = session_id,
     })
@@ -433,10 +557,37 @@ function M.open_fill(pending, opts)
         session_id = usage.session_id
         if opts.on_session_update then opts.on_session_update(session_id) end
       end
-      if response.code and response.code ~= vim.NIL then pending_code = vim.trim(response.code) end
-      if response.changes and #response.changes > 0 then pending_changes = response.changes end
-      set_content(pending_code, response)
-      set_winbar(response.done and TITLE_DONE or TITLE_IDLE)
+
+      -- Rebuild the queue from the revised response. A new code-Q is only
+      -- accepted if the current head WAS a code-Q (otherwise the in-scope
+      -- edit is already applied and the AI was instructed not to return one).
+      local new_q = {}
+      if cur_q and cur_q.type == "code"
+         and response.code and response.code ~= vim.NIL and response.code ~= "" then
+        table.insert(new_q, { type = "code", code = vim.trim(response.code) })
+      end
+      for _, ch in ipairs(normalize_changes(response.changes)) do
+        table.insert(new_q, { type = "change", change = ch })
+      end
+      if #new_q > 0 then
+        questions = new_q
+        total = #questions
+      end
+      -- Always capture the AI's message so render_q can display it inline
+      -- above the current question (instead of a fleeting notification).
+      if response.message and response.message ~= vim.NIL and response.message ~= "" then
+        last_message = response.message
+      else
+        last_message = nil
+      end
+      if #questions == 0 then
+        if last_message then
+          vim.notify("novibe AI: " .. last_message, vim.log.levels.INFO)
+        end
+        close()
+      else
+        render_q()
+      end
     end))
   end
 
@@ -449,15 +600,18 @@ function M.open_fill(pending, opts)
   vim.keymap.set("n", "q",    close,   kopts)
   vim.keymap.set("n", "<Esc>", close,  kopts)
   vim.keymap.set("n", "<CR>", confirm, kopts)
+  vim.keymap.set("n", "s",    skip,    kopts)
 
-  -- Called during streaming with partial code — no input area yet
+  -- During streaming, render partial code raw (no MARKER, no reply area).
+  -- Once finalize() runs, the question queue takes over and push() becomes a no-op.
   local function push(partial)
-    if done or not vim.api.nvim_buf_is_valid(buf) then return end
+    if done or finalized or not vim.api.nvim_buf_is_valid(buf) then return end
     vim.bo[buf].modifiable = true
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(partial, "\n", { plain = true }))
   end
 
-  -- Called when initial AI call completes
+  -- Called when initial AI call completes. Builds the question queue and
+  -- renders question 1.
   local function finalize(response, usage)
     if done then return end
     finalized = true
@@ -466,36 +620,59 @@ function M.open_fill(pending, opts)
       session_id = usage.session_id
       if opts.on_session_update then opts.on_session_update(session_id) end
     end
-    pending_code    = response.code and response.code ~= vim.NIL and vim.trim(response.code) or nil
-    pending_changes = response.changes or {}
-    set_content(pending_code, response)
-    set_winbar(response.done and TITLE_DONE or TITLE_IDLE)
-    -- if changes proposed, scroll to show them and warn the user
-    if #pending_changes > 0 and vim.api.nvim_win_is_valid(win) then
-      local all = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-      for i, l in ipairs(all) do
-        if l:match("^┌─") then
-          vim.api.nvim_win_set_cursor(win, { i, 0 })
-          break
-        end
-      end
-      vim.notify(
-        string.format("novibe: AI proposed %d out-of-scope change(s) — review in the fill chat, then <CR> to apply all or ask to revise", #pending_changes),
-        vim.log.levels.WARN
-      )
+
+    questions = {}
+    if response.code and response.code ~= vim.NIL and response.code ~= "" then
+      table.insert(questions, { type = "code", code = vim.trim(response.code) })
+    end
+    for _, ch in ipairs(normalize_changes(response.changes)) do
+      table.insert(questions, { type = "change", change = ch })
+    end
+    total = #questions
+
+    if response.message and response.message ~= vim.NIL and response.message ~= "" then
+      last_message = response.message
     end
 
-    -- focus: normal mode → move to fill window (stay normal so <CR> works immediately)
-    -- insert mode → notify, user navigates manually
+    if #questions == 0 then
+      if last_message then
+        vim.notify("novibe AI: " .. last_message, vim.log.levels.INFO)
+      else
+        vim.notify("novibe: AI returned nothing to apply — closing", vim.log.levels.WARN)
+      end
+      close()
+      return
+    end
+
+    local code_count, change_count = 0, 0
+    for _, q in ipairs(questions) do
+      if q.type == "code" then code_count = code_count + 1
+      else change_count = change_count + 1 end
+    end
+    local parts = {}
+    if code_count > 0   then table.insert(parts, code_count .. " in-scope") end
+    if change_count > 0 then table.insert(parts, change_count .. " out-of-scope") end
+    vim.notify(string.format(
+      "novibe: %d question(s) — %s. <CR> apply · s skip · :w revise · q quit.",
+      total, table.concat(parts, " + ")
+    ), code_count + change_count > 1 and vim.log.levels.WARN or vim.log.levels.INFO)
+
+    render_q()
+
+    -- Move focus to chat window only if user was in normal mode, so <CR>
+    -- works immediately. Otherwise just notify (don't yank them out of insert).
     local mode = vim.api.nvim_get_mode().mode
     if mode == "n" and vim.api.nvim_win_is_valid(win) then
       vim.api.nvim_set_current_win(win)
     else
-      vim.notify("novibe: fill ready — navigate to preview and press <CR> to apply", vim.log.levels.INFO)
+      vim.notify("novibe: fill ready — navigate to the preview and press <CR>", vim.log.levels.INFO)
     end
   end
 
   return { push = push, finalize = finalize, cancel = close }
 end
+
+-- exposed for tests
+M._normalize_changes = normalize_changes
 
 return M

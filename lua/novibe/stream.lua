@@ -31,7 +31,9 @@ function M.extract_code(text)
         local hex = text:sub(i + 2, i + 5)
         local cp  = tonumber(hex, 16)
         if cp then
-          local ok, ch = pcall(utf8.char, cp)
+          -- vim.fn.nr2char(cp, 1) emits UTF-8 regardless of 'encoding';
+          -- portable across luajit (no native utf8 lib) and Lua 5.3+.
+          local ok, ch = pcall(vim.fn.nr2char, cp, 1)
           table.insert(result, ok and ch or '?')
         end
         i = i + 6
