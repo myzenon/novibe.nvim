@@ -108,18 +108,6 @@ local function gather_file_context(bufnr)
   return list
 end
 
--- Returns list of `change.file` paths that don't exist on disk.
-local function missing_paths(changes, root)
-  local missing = {}
-  for _, c in ipairs(changes or {}) do
-    if type(c.file) == "string" and c.file ~= "" then
-      local p = c.file
-      if p:sub(1, 1) ~= "/" then p = root .. "/" .. p end
-      if vim.fn.filereadable(p) == 0 then table.insert(missing, c.file) end
-    end
-  end
-  return missing
-end
 
 local function start_spinner(bufnr, start_line, end_line)
   local frame = 1
@@ -297,6 +285,16 @@ function M.fill(line1, line2)
     end
     local prompt = table.concat(parts, "\n")
 
+    -- open fill chat immediately — no focus steal, streaming goes here
+    local fill_chat = chat.open_fill(
+      { bufnr = bufnr, start_line = start_line, end_line = end_line,
+        on_apply = function(code)
+          M._last_fill = { original = vim.trim(code), bufnr = bufnr, start_line = start_line }
+        end },
+      { bin = bin, provider = provider, session_id = M._opencode_session_id,
+        on_session_update = function(sid) M._opencode_session_id = sid end }
+    )
+
     local stop_spinner = start_spinner(bufnr, start_line, end_line)
 
     local profile = config.options.active_profile
@@ -311,8 +309,7 @@ function M.fill(line1, line2)
       stream       = provider.streaming,
     })
 
-    -- streaming state: accumulated raw stdout + model text for progressive code splice
-    local sctx = { raw = "", text = "", end_line = end_line }
+    local sctx = { raw = "", text = "" }
 
     local sys_opts = { text = true }
     if provider.streaming then
@@ -323,13 +320,9 @@ function M.fill(line1, line2)
         if chunk_text == "" then return end
         sctx.text = sctx.text .. chunk_text
         local partial = require("novibe.stream").extract_code(sctx.text)
-        if not partial then return end
-        vim.schedule(function()
-          if not vim.api.nvim_buf_is_valid(bufnr) then return end
-          local new_lines = vim.split(partial, "\n", { plain = true })
-          vim.api.nvim_buf_set_lines(bufnr, start_line - 1, sctx.end_line, false, new_lines)
-          sctx.end_line = start_line - 1 + #new_lines
-        end)
+        if partial then
+          vim.schedule(function() fill_chat.push(partial) end)
+        end
       end
     end
 
@@ -346,21 +339,11 @@ function M.fill(line1, line2)
             string.format("novibe: exit %d — %s", result.code, vim.trim(result.stderr or "")),
             vim.log.levels.ERROR
           )
+          fill_chat.cancel()
           return
         end
 
         local response, usage = provider.parse_output(stdout)
-        if usage and usage.session_id then
-          M._opencode_session_id = usage.session_id
-        end
-
-        -- final authoritative splice (corrects any partial streaming state)
-        if response.code and response.code ~= vim.NIL then
-          local new_lines = vim.split(vim.trim(response.code), "\n", { plain = true })
-          local splice_end = provider.streaming and sctx.end_line or end_line
-          vim.api.nvim_buf_set_lines(bufnr, start_line - 1, splice_end, false, new_lines)
-          M._last_fill = { original = vim.trim(response.code), bufnr = bufnr, start_line = start_line }
-        end
 
         M._session_count = M._session_count + 1
 
@@ -377,70 +360,7 @@ function M.fill(line1, line2)
           )
         end
 
-        local has_changes = response.changes and #response.changes > 0
-        local has_message = response.message and response.message ~= vim.NIL
-
-        -- Validate change.file paths exist on disk; if not, auto-revise once
-        -- before opening chat. The model usually self-corrects when told the
-        -- specific paths it invented are missing.
-        local function open_review(resp)
-          chat.open(resp, {
-            bin        = bin,
-            provider   = provider,
-            session_id = M._opencode_session_id,
-          })
-        end
-
-        local function validate_and_open(resp, retries_left)
-          local missing = missing_paths(resp.changes, project_root(filename))
-          if #missing == 0 or retries_left <= 0 then
-            open_review(resp)
-            return
-          end
-
-          local fix_msg = string.format(
-            "Your previous response referenced files that do NOT exist in this project: %s.\n"
-            .. "Revise the changes[] to either (a) use existing file paths only, "
-            .. "or (b) put the new code in the file the user is currently editing (%s). "
-            .. "Do not invent file paths.\n\n"
-            .. '[Respond ONLY in JSON: {"message":...,"changes":[...],"done":false}]',
-            table.concat(missing, ", "),
-            vim.fn.fnamemodify(filename, ":.")
-          )
-
-          local fix_cmd = provider.build_cmd(bin, fix_msg, {
-            profile      = nil,
-            bare         = false,
-            use_continue = true,
-            session_id   = M._opencode_session_id,
-          })
-
-          vim.system(fix_cmd, { text = true }, vim.schedule_wrap(function(r2)
-            if r2.code ~= 0 or (r2.stdout or "") == "" then
-              -- give up silently and open the chat with the original response
-              -- so the user sees what was proposed and can react manually
-              open_review(resp)
-              return
-            end
-            local resp2, usage2 = provider.parse_output(r2.stdout)
-            if usage2 and usage2.session_id then M._opencode_session_id = usage2.session_id end
-            -- carry over the original response.code if the revision omitted it
-            if (not resp2.code or resp2.code == vim.NIL) and resp.code then
-              resp2.code = resp.code
-            end
-            validate_and_open(resp2, retries_left - 1)
-          end))
-        end
-
-        if has_changes then
-          validate_and_open(response, 1)
-        elseif has_message then
-          chat.open(response, {
-            bin        = bin,
-            provider   = provider,
-            session_id = M._opencode_session_id,
-          })
-        end
+        fill_chat.finalize(response, usage)
       end)
     )
   end, { stats = input_stats, profile = config.options.active_profile })

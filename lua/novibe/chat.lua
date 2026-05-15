@@ -79,8 +79,9 @@ local function schema_reminder(pending)
   return table.concat(lines, "\n")
 end
 
-local TITLE_IDLE = "%#Title# novibe %#Normal#  ·  :w send  ·  <CR> apply  ·  q quit"
-local TITLE_DONE = "%#DiagnosticOk# ✓ done  %#Normal#·  :w send  ·  <CR> apply  ·  q quit"
+local TITLE_IDLE        = "%#Title# novibe %#Normal#  ·  :w send  ·  <CR> apply  ·  q quit"
+local TITLE_DONE        = "%#DiagnosticOk# ✓ done  %#Normal#·  :w send  ·  <CR> apply  ·  q quit"
+local TITLE_GENERATING  = "%#Title# novibe %#Normal#  ·  ⠋ generating…  ·  q cancel"
 
 function M.open(initial_response, opts)
   local bin        = opts.bin
@@ -272,6 +273,215 @@ function M.open(initial_response, opts)
   vim.keymap.set("n", "q",     close,   kopts)
   vim.keymap.set("n", "<Esc>", close,   kopts)
   vim.keymap.set("n", "<CR>",  confirm, kopts)
+end
+
+-- Open the fill-preview chat. Returns { push, finalize, cancel }.
+--   push(partial)       — update displayed code during streaming (no input yet)
+--   finalize(resp, use) — streaming done; show final code + enable input
+--   cancel()            — close without applying (on error)
+-- pending: { bufnr, start_line, end_line, on_apply(code) }
+-- opts:    { bin, provider, session_id, on_session_update(sid) }
+function M.open_fill(pending, opts)
+  local bin      = opts.bin
+  local provider = opts.provider
+  local session_id = opts.session_id
+
+  local ns  = vim.api.nvim_create_namespace("novibe_fill")
+  local buf = vim.api.nvim_create_buf(false, true)
+  pcall(vim.api.nvim_buf_set_name, buf, "novibe://fill/" .. vim.uv.hrtime())
+  vim.bo[buf].buftype   = "acwrite"
+  vim.bo[buf].bufhidden = "wipe"
+  vim.bo[buf].swapfile  = false
+
+  local ft = pending.bufnr and vim.bo[pending.bufnr].filetype or ""
+  if ft ~= "" then vim.bo[buf].filetype = ft end
+
+  local prev_win = vim.api.nvim_get_current_win()
+  vim.cmd("botright vsplit")
+  local win = vim.api.nvim_get_current_win()
+  vim.api.nvim_win_set_buf(win, buf)
+  vim.api.nvim_win_set_width(win, split_width())
+  vim.api.nvim_set_current_win(prev_win)  -- no focus steal
+
+  vim.wo[win].wrap        = false
+  vim.wo[win].number      = false
+  vim.wo[win].signcolumn  = "no"
+  vim.wo[win].cursorline  = false
+  vim.wo[win].winfixwidth = true
+
+  local function set_winbar(text)
+    if vim.api.nvim_win_is_valid(win) then vim.wo[win].winbar = text end
+  end
+  set_winbar(TITLE_GENERATING)
+
+  local done            = false
+  local finalized       = false
+  local pending_code    = nil
+  local pending_changes = {}
+  local current_job     = nil
+  local sending_enabled = false
+
+  local function inner_w()
+    return vim.api.nvim_win_is_valid(win) and (vim.api.nvim_win_get_width(win) - 2) or 60
+  end
+
+  local function close()
+    done = true
+    if current_job then pcall(function() current_job:kill(9) end); current_job = nil end
+    if vim.api.nvim_get_current_win() == win then vim.cmd("stopinsert") end
+    if vim.api.nvim_win_is_valid(win) then vim.api.nvim_win_close(win, true) end
+  end
+
+  -- Render code + optional message/changes into buffer with MARKER below
+  local function set_content(code, response)
+    local lines, hls = {}, {}
+    local function push(line, hl)
+      table.insert(lines, line)
+      if hl then table.insert(hls, { #lines - 1, hl }) end
+    end
+    if code then
+      for _, l in ipairs(vim.split(code, "\n", { plain = true })) do push(l) end
+      push("")
+    end
+    if response then
+      local msg = response.message
+      if msg and msg ~= vim.NIL and msg ~= "" then
+        for _, l in ipairs(vim.split(msg, "\n", { plain = true })) do push(l) end
+        push("")
+      end
+      local iw = inner_w()
+      for i, ch in ipairs(response.changes or {}) do
+        local num = #response.changes > 1 and string.format("[%d/%d] ", i, #response.changes) or ""
+        push("┌─ " .. num .. ch.file .. "  [" .. (ch.action or "replace") .. "]", "Title")
+        push("│  " .. ch.description, "Comment")
+        push("│")
+        for _, l in ipairs(vim.split(vim.trim(ch.find), "\n", { plain = true })) do
+          push("  - " .. l, "DiffDelete")
+        end
+        for _, l in ipairs(vim.split(vim.trim(ch.replace), "\n", { plain = true })) do
+          push("  + " .. l, "DiffAdd")
+        end
+        push("└" .. string.rep("─", iw - 2), "Comment")
+        push("")
+      end
+    end
+    local content = vim.list_extend(vim.deepcopy(lines), { MARKER, "" })
+    vim.bo[buf].modifiable = true
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, content)
+    vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+    for _, h in ipairs(hls) do
+      vim.api.nvim_buf_add_highlight(buf, ns, h[2], h[1], 0, -1)
+    end
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_set_cursor(win, { #content, 0 })
+    end
+  end
+
+  local function extract_reply()
+    local all = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    for i = #all, 1, -1 do
+      if all[i] == MARKER then
+        return vim.trim(table.concat(vim.list_slice(all, i + 1), "\n"))
+      end
+    end
+    return ""
+  end
+
+  local function fill_spinner()
+    local frame = 1
+    local timer = vim.uv.new_timer()
+    timer:start(80, 80, vim.schedule_wrap(function()
+      if not vim.api.nvim_win_is_valid(win) then timer:stop(); timer:close(); return end
+      frame = (frame % #spinner_frames) + 1
+      set_winbar("%#Title# novibe %#Normal#  ·  " .. spinner_frames[frame] .. " thinking…  ·  q quit")
+    end))
+    return function() timer:stop(); timer:close() end
+  end
+
+  local function confirm()
+    if done or not finalized then return end
+    if pending_code and vim.api.nvim_buf_is_valid(pending.bufnr) then
+      local new_lines = vim.split(pending_code, "\n", { plain = true })
+      vim.api.nvim_buf_set_lines(pending.bufnr, pending.start_line - 1, pending.end_line, false, new_lines)
+      if opts.on_apply then opts.on_apply(pending_code) end
+    end
+    if #pending_changes > 0 then apply.apply_all(pending_changes) end
+    close()
+  end
+
+  local function send()
+    if done or not sending_enabled then return end
+    local reply = extract_reply()
+    if is_confirm(reply) then confirm(); return end
+
+    local stop = fill_spinner()
+    local hint = '\n\n[Respond ONLY in JSON: {"code":...,"message":...,"changes":[...],"done":true/false}]'
+    local cmd = provider.build_cmd(bin, (reply ~= "" and reply or "continue") .. hint, {
+      profile = nil, bare = false, use_continue = true, session_id = session_id,
+    })
+
+    current_job = vim.system(cmd, { text = true }, vim.schedule_wrap(function(result)
+      current_job = nil
+      stop()
+      if not vim.api.nvim_win_is_valid(win) then return end
+      if result.code ~= 0 or (result.stdout or "") == "" then
+        vim.notify(string.format("novibe: exit %d — %s", result.code, vim.trim(result.stderr or "")), vim.log.levels.ERROR)
+        return
+      end
+      local response, usage = provider.parse_output(result.stdout)
+      if usage and usage.session_id then
+        session_id = usage.session_id
+        if opts.on_session_update then opts.on_session_update(session_id) end
+      end
+      if response.code and response.code ~= vim.NIL then pending_code = vim.trim(response.code) end
+      if response.changes and #response.changes > 0 then pending_changes = response.changes end
+      set_content(pending_code, response)
+      set_winbar(response.done and TITLE_DONE or TITLE_IDLE)
+    end))
+  end
+
+  vim.api.nvim_create_autocmd("BufWriteCmd", {
+    buffer = buf,
+    callback = function() vim.bo[buf].modified = false; send() end,
+  })
+
+  local kopts = { buffer = buf, nowait = true }
+  vim.keymap.set("n", "q",    close,   kopts)
+  vim.keymap.set("n", "<Esc>", close,  kopts)
+  vim.keymap.set("n", "<CR>", confirm, kopts)
+
+  -- Called during streaming with partial code — no input area yet
+  local function push(partial)
+    if done or not vim.api.nvim_buf_is_valid(buf) then return end
+    vim.bo[buf].modifiable = true
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(partial, "\n", { plain = true }))
+  end
+
+  -- Called when initial AI call completes
+  local function finalize(response, usage)
+    if done then return end
+    finalized = true
+    sending_enabled = true
+    if usage and usage.session_id then
+      session_id = usage.session_id
+      if opts.on_session_update then opts.on_session_update(session_id) end
+    end
+    pending_code    = response.code and response.code ~= vim.NIL and vim.trim(response.code) or nil
+    pending_changes = response.changes or {}
+    set_content(pending_code, response)
+    set_winbar(response.done and TITLE_DONE or TITLE_IDLE)
+    -- focus: normal mode → move to fill window; insert mode → notify
+    local mode = vim.api.nvim_get_mode().mode
+    if mode == "n" and vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_set_current_win(win)
+      vim.api.nvim_win_set_cursor(win, { vim.api.nvim_buf_line_count(buf), 0 })
+      vim.cmd("startinsert")
+    else
+      vim.notify("novibe: fill ready — navigate to preview and press <CR> to apply", vim.log.levels.INFO)
+    end
+  end
+
+  return { push = push, finalize = finalize, cancel = close }
 end
 
 return M
