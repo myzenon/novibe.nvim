@@ -1,12 +1,12 @@
-# novibe.nvim — Claude onboarding
+# novibe.nvim — Gemini onboarding
 
 You are being asked to set up novibe.nvim for this project.
 
-novibe.nvim is a Neovim plugin that sends code selections to Claude CLI for implementation. It reads convention files from `.no_vibe/` and injects matching sections into every prompt — so Claude always follows the project's conventions without the user repeating them.
+novibe.nvim is a Neovim plugin that sends code selections to an AI CLI for implementation. It reads convention files from `.no_vibe/` and injects matching sections into every prompt — so the model always follows the project's conventions without the user repeating them.
 
-## Step 1 — Add novibe format to CLAUDE.md
+## Step 1 — Add novibe format to GEMINI.md
 
-Append the following section to this project's `CLAUDE.md` (create it if missing):
+Append the following section to this project's `GEMINI.md` (create it if missing):
 
 ```markdown
 ## novibe conventions
@@ -54,7 +54,9 @@ If the project has non-obvious structural knowledge worth preserving (key depend
 
 Each file uses the same section-header format. Add `<!-- last-verified: <current-git-hash> -->` after the header so novibe can detect when the area changes.
 
-You can also grow the knowledge base lazily during `:NovibeConsult` sessions: say **"snapshot"** whenever you discover something worth keeping, and the AI will write it to the right file with the current commit hash.
+You can also grow the knowledge base lazily during `:NovibeConsult` sessions: the seed context is injected via `--prompt-interactive` when Gemini starts. Say **"snapshot"** whenever you discover something worth keeping, and write it to the right file with the current commit hash.
+
+Note: the workspace must be trusted before Gemini CLI will run non-interactively. Either run `gemini` interactively once and trust the directory, or set `GEMINI_CLI_TRUST_WORKSPACE=true` in your environment.
 
 ## Step 4 — Tell the user their ongoing workflows
 
@@ -67,15 +69,17 @@ After completing the above steps, tell the user about the three loops they'll us
 - Never hand-edit `learned-*.md` — they are owned by distillation.
 
 **Growing the knowledge base (`:NovibeConsult` + "snapshot")**
-- Open a consult session with `:NovibeConsult`. Explore the codebase, ask questions, investigate dependencies.
-- Say **"snapshot"** whenever you discover something worth keeping. The AI writes it to the right `map-*`, `rule-*`, or `decision-*` file with the current commit hash for staleness tracking.
+- Open a consult session with `:NovibeConsult`. The seed context (file, line, conventions) is injected via `--prompt-interactive` when Gemini starts.
+- Explore the codebase, ask questions, investigate dependencies.
+- Say **"snapshot"** whenever you discover something worth keeping. Write it to the right `map-*`, `rule-*`, or `decision-*` file with the current commit hash for staleness tracking.
 - The knowledge base grows lazily as you touch areas — no need to document everything upfront.
 
 **Switching models (`:NovibeProfile`)**
 - Run `:NovibeProfile` to open a two-step picker: choose a slot (Act or Consult), then a profile. Each slot persists independently.
-- Profiles are defined in your `setup()` call with `provider`, `model`, and `effort`. No active profile = CLI defaults.
-- Use a fast/cheap profile for routine fills and a powerful profile for complex consult sessions.
+- Profiles are defined in your `setup()` call with `provider = "gemini"` and `model`. `effort` is ignored for Gemini (no CLI equivalent). No active profile = CLI defaults.
+- Use a fast model (e.g. `gemini-2.0-flash`) for routine fills and a powerful one (e.g. `gemini-2.5-pro`) for complex consult sessions.
 
 Finally, tell the user:
 - Add `.no_vibe/diffs.json` to `.gitignore` (transient working state, not meant to be committed)
 - They can split conventions into multiple `convention-*.md` files at any time — novibe loads all of them
+- Ensure `GEMINI_CLI_TRUST_WORKSPACE=true` is set (or trust the workspace interactively once) so non-interactive runs work
