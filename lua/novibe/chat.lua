@@ -79,7 +79,8 @@ local function schema_reminder(pending)
   return table.concat(lines, "\n")
 end
 
-local TITLE_IDLE = "%#Title# novibe %#Normal#  ·  :w send  ·  q quit"
+local TITLE_IDLE = "%#Title# novibe %#Normal#  ·  :w send  ·  <CR> apply  ·  q quit"
+local TITLE_DONE = "%#DiagnosticOk# ✓ done  %#Normal#·  :w send  ·  <CR> apply  ·  q quit"
 
 function M.open(initial_response, opts)
   local bin        = opts.bin
@@ -242,16 +243,11 @@ function M.open(initial_response, opts)
           pending_changes = response.changes
         end
 
-        if response.done then
-          if response.changes and #response.changes > 0 then
-            apply.apply_all(response.changes)
-          end
-          close()
-          return
-        end
-
         local new_lines, new_hls = render(response, inner_width())
         set_content(new_lines, new_hls)
+        if response.done then
+          set_winbar(TITLE_DONE)
+        end
       end)
     )
   end
@@ -264,9 +260,18 @@ function M.open(initial_response, opts)
     end,
   })
 
-  local opts = { buffer = buf, nowait = true }
-  vim.keymap.set("n", "q",     close, opts)
-  vim.keymap.set("n", "<Esc>", close, opts)
+  local function confirm()
+    if done then return end
+    if #pending_changes > 0 then
+      apply.apply_all(pending_changes)
+    end
+    close()
+  end
+
+  local kopts = { buffer = buf, nowait = true }
+  vim.keymap.set("n", "q",     close,   kopts)
+  vim.keymap.set("n", "<Esc>", close,   kopts)
+  vim.keymap.set("n", "<CR>",  confirm, kopts)
 end
 
 return M
