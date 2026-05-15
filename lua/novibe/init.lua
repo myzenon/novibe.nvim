@@ -267,6 +267,12 @@ function M.fill(line1, line2)
       end
     end
 
+    local ctx_before_top = math.max(1, start_line - 10)
+    local enclosing = require("novibe.context").enclosing(bufnr, start_line, ctx_before_top)
+    if enclosing then
+      table.insert(parts, enclosing)
+      table.insert(parts, "")
+    end
     if #ctx_before > 0 then
       table.insert(parts, "Context before selection (DO NOT reproduce this):")
       table.insert(parts, table.concat(ctx_before, "\n"))

@@ -75,6 +75,13 @@ Project conventions (.no_vibe/convention-*.md and .no_vibe/learned-*.md) use the
   if commit then
     table.insert(parts, "Current commit: " .. commit)
   end
+
+  local focus_line = (has_range and line1) or cursor[1]
+  local enclosing = require("novibe.context").enclosing(prev_buf, focus_line, 1)
+  if enclosing then
+    table.insert(parts, "\n" .. enclosing)
+  end
+
   if selection and selection ~= "" then
     table.insert(parts, "\nSelected code:\n```\n" .. selection .. "\n```")
   end
