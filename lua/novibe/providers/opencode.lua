@@ -1,6 +1,7 @@
 local M = {}
 
 M.name = "opencode"
+M.streaming = true
 
 function M.find_bin()
   local found = vim.fn.exepath("opencode")
@@ -13,6 +14,21 @@ function M.find_bin()
     if vim.fn.filereadable(path) == 1 then return path end
   end
   return nil
+end
+
+-- Called once per stdout data chunk. Returns text extracted from text events.
+function M.parse_chunk(data)
+  local parts = {}
+  for _, line in ipairs(vim.split(data, "\n", { plain = true })) do
+    if line ~= "" then
+      local ok, ev = pcall(vim.json.decode, line)
+      if ok and type(ev) == "table" and ev.type == "text"
+         and ev.part and type(ev.part.text) == "string" then
+        table.insert(parts, ev.part.text)
+      end
+    end
+  end
+  return table.concat(parts)
 end
 
 -- opts: { profile, session_id }

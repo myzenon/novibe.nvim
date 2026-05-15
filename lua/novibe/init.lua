@@ -304,13 +304,37 @@ function M.fill(line1, line2)
       session_id   = carry and M._opencode_session_id or nil,
     })
 
+    -- streaming state: accumulated raw stdout + model text for progressive code splice
+    local sctx = { raw = "", text = "", end_line = end_line }
+
+    local sys_opts = { text = true }
+    if provider.streaming then
+      sys_opts.stdout = function(_, data)
+        if not data then return end
+        sctx.raw  = sctx.raw  .. data
+        local chunk_text = provider.parse_chunk(data)
+        if chunk_text == "" then return end
+        sctx.text = sctx.text .. chunk_text
+        local partial = require("novibe.stream").extract_code(sctx.text)
+        if not partial then return end
+        vim.schedule(function()
+          if not vim.api.nvim_buf_is_valid(bufnr) then return end
+          local new_lines = vim.split(partial, "\n", { plain = true })
+          vim.api.nvim_buf_set_lines(bufnr, start_line - 1, sctx.end_line, false, new_lines)
+          sctx.end_line = start_line - 1 + #new_lines
+        end)
+      end
+    end
+
     vim.system(
       cmd,
-      { text = true },
+      sys_opts,
       vim.schedule_wrap(function(result)
         stop_spinner()
 
-        if result.code ~= 0 or (result.stdout or "") == "" then
+        local stdout = provider.streaming and sctx.raw or (result.stdout or "")
+
+        if result.code ~= 0 or stdout == "" then
           vim.notify(
             string.format("novibe: exit %d — %s", result.code, vim.trim(result.stderr or "")),
             vim.log.levels.ERROR
@@ -318,15 +342,16 @@ function M.fill(line1, line2)
           return
         end
 
-        local response, usage = provider.parse_output(result.stdout)
+        local response, usage = provider.parse_output(stdout)
         if usage and usage.session_id then
           M._opencode_session_id = usage.session_id
         end
 
-        -- splice the code replacement
+        -- final authoritative splice (corrects any partial streaming state)
         if response.code and response.code ~= vim.NIL then
           local new_lines = vim.split(vim.trim(response.code), "\n", { plain = true })
-          vim.api.nvim_buf_set_lines(bufnr, start_line - 1, end_line, false, new_lines)
+          local splice_end = provider.streaming and sctx.end_line or end_line
+          vim.api.nvim_buf_set_lines(bufnr, start_line - 1, splice_end, false, new_lines)
           M._last_fill = { original = vim.trim(response.code), bufnr = bufnr, start_line = start_line }
         end
 
