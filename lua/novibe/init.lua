@@ -378,6 +378,9 @@ function M.fill(line1, line2)
     end
     local prompt = table.concat(parts, "\n")
 
+    local stop_spinner = start_spinner(bufnr, start_line, end_line)
+    local init_job     = nil
+
     -- open fill chat immediately — no focus steal, streaming goes here
     local fill_chat = chat.open_fill(
       { bufnr = bufnr, start_line = start_line, end_line = end_line,
@@ -385,10 +388,12 @@ function M.fill(line1, line2)
           M._last_fill = { original = vim.trim(code), bufnr = bufnr, start_line = start_line }
         end },
       { bin = bin, provider = provider, session_id = M._opencode_session_id,
-        on_session_update = function(sid) M._opencode_session_id = sid end }
+        on_session_update = function(sid) M._opencode_session_id = sid end,
+        on_cancel = function()
+          if init_job then pcall(function() init_job:kill(9) end); init_job = nil end
+          stop_spinner()
+        end }
     )
-
-    local stop_spinner = start_spinner(bufnr, start_line, end_line)
 
     local profile = config.options.active_profile
     local carry = not M._skip_continue
@@ -419,10 +424,11 @@ function M.fill(line1, line2)
       end
     end
 
-    vim.system(
+    init_job = vim.system(
       cmd,
       sys_opts,
       vim.schedule_wrap(function(result)
+        init_job = nil
         stop_spinner()
 
         local stdout = provider.streaming and sctx.raw or (result.stdout or "")

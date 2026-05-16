@@ -465,6 +465,9 @@ function M.open_fill(pending, opts)
     if vim.api.nvim_get_current_win() == win then vim.cmd("stopinsert") end
     if vim.api.nvim_win_is_valid(win) then vim.api.nvim_win_close(win, true) end
     if _fill_win == win then _fill_win = nil end
+    -- Notify init.lua so it can kill the outer vim.system job and clear the
+    -- working-buffer spinner (which lives outside the chat window).
+    if opts.on_cancel then pcall(opts.on_cancel) end
   end
 
   -- Render the head-of-queue question + MARKER + reply area. Cursor lands at
