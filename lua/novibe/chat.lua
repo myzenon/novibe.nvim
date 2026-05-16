@@ -374,6 +374,7 @@ function M.open_fill(pending, opts)
   vim.api.nvim_win_set_buf(win, buf)
   vim.api.nvim_win_set_width(win, split_width())
   vim.api.nvim_set_current_win(prev_win)  -- no focus steal
+  _fill_win = win
 
   vim.wo[win].wrap        = false
   vim.wo[win].number      = false
@@ -438,6 +439,7 @@ function M.open_fill(pending, opts)
     if current_job then pcall(function() current_job:kill(9) end); current_job = nil end
     if vim.api.nvim_get_current_win() == win then vim.cmd("stopinsert") end
     if vim.api.nvim_win_is_valid(win) then vim.api.nvim_win_close(win, true) end
+    if _fill_win == win then _fill_win = nil end
   end
 
   -- Render the head-of-queue question + MARKER + reply area. Cursor lands at
@@ -808,6 +810,20 @@ function M.open_fill(pending, opts)
   end
 
   return { push = push, finalize = finalize, cancel = close }
+end
+
+-- Track the active fill window so :NovibeFocus can jump to it.
+local _fill_win = nil
+
+-- Focus the active fill-preview chat window.
+-- Called by :NovibeFocus so the user can jump from the working buffer to the
+-- chat without reaching for the mouse or using window-navigation keys.
+function M.focus_fill()
+  if not (_fill_win and vim.api.nvim_win_is_valid(_fill_win)) then
+    vim.notify("novibe: no active fill chat to focus", vim.log.levels.WARN)
+    return
+  end
+  vim.api.nvim_set_current_win(_fill_win)
 end
 
 -- exposed for tests
