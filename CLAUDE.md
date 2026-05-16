@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Documentation checklist
+
+When the user says "update the docs" or asks to check/update documentation, always review **all three** doc files — not just CLAUDE.md:
+
+- `CLAUDE.md` — developer/contributor reference (file structure, core flow, CLI flags, schema)
+- `README.md` — user-facing: usage flow, commands table, key bindings, teach/gen examples
+- `CONFIG.md` — user-facing: profiles, provider differences, conventions format, how it works diagram
+
+CLAUDE.md tends to stay current because it is in the dev loop. README.md and CONFIG.md drift — check them explicitly for stale flow descriptions, missing commands, and outdated key bindings whenever user-facing behavior changes.
+
 ## What This Plugin Does
 
 `novibe.nvim` is a minimal Neovim plugin for LazyVim. The user writes function skeletons — signatures plus descriptive comments — visually selects the block, and invokes the plugin. The selection is sent to the active AI CLI (Claude Code, opencode, or gemini) and streamed into a **fill-preview chat split** for review. The user presses `<CR>` to apply the code to the working buffer, then reviews any out-of-scope changes (imports, types, other files) in a second phase before applying them.
