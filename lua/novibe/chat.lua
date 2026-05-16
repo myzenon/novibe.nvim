@@ -379,8 +379,14 @@ function M.open_fill(pending, opts)
   vim.bo[buf].bufhidden = "wipe"
   vim.bo[buf].swapfile  = false
 
-  local ft = pending.bufnr and vim.bo[pending.bufnr].filetype or ""
-  if ft ~= "" then vim.bo[buf].filetype = ft end
+  -- Start treesitter (not filetype) so the streaming push phase has syntax
+  -- highlighting. render_q stops/restarts it per-question, so there's no
+  -- conflict between the source file's language and a change-Q's target lang.
+  local init_ft = pending.bufnr and vim.bo[pending.bufnr].filetype or ""
+  if init_ft ~= "" then
+    local init_lang = (vim.treesitter.language.get_lang and vim.treesitter.language.get_lang(init_ft)) or init_ft
+    pcall(vim.treesitter.start, buf, init_lang)
+  end
 
   local prev_win = vim.api.nvim_get_current_win()
   vim.cmd("botright vsplit")
@@ -487,13 +493,12 @@ function M.open_fill(pending, opts)
       push("")
     end
 
-    local function lnum(n) return n and string.format("%4d ", n) or "     " end
-
     if q.type == "code" then
       push(string.format("[%d/%d] In-scope code (will replace your selection):", idx, total), "Title")
       push("")
       -- Show surrounding context from the working buffer so the user knows
       -- where the new code lands (original selection as -, new code as +).
+      -- No line-number prefix — treesitter needs clean lines to parse correctly.
       local orig_lines = {}
       if pending.bufnr and vim.api.nvim_buf_is_valid(pending.bufnr) then
         orig_lines = vim.api.nvim_buf_get_lines(
@@ -503,12 +508,10 @@ function M.open_fill(pending, opts)
       if pending.bufnr and vim.api.nvim_buf_is_valid(pending.bufnr) then
         ctx_before, ctx_after = buf_context(pending.bufnr, pending.start_line, pending.end_line, CONTEXT_LINES)
       end
-      local before_start = pending.start_line - #ctx_before
-      for i, l in ipairs(ctx_before) do push(lnum(before_start + i - 1) .. "    " .. l, "Comment") end
-      for i, l in ipairs(orig_lines) do push(lnum(pending.start_line + i - 1) .. "  - " .. l, "DiffDelete") end
-      for _, l in ipairs(vim.split(q.code or "", "\n", { plain = true })) do push(lnum(nil) .. "  + " .. l, "DiffAdd") end
-      local after_start = pending.end_line + 1
-      for i, l in ipairs(ctx_after) do push(lnum(after_start + i - 1) .. "    " .. l, "Comment") end
+      for _, l in ipairs(ctx_before)  do push(l, "Comment")    end
+      for _, l in ipairs(orig_lines)  do push(l, "DiffDelete") end
+      for _, l in ipairs(vim.split(q.code or "", "\n", { plain = true })) do push(l, "DiffAdd") end
+      for _, l in ipairs(ctx_after)   do push(l, "Comment")    end
       push("└" .. string.rep("─", inner_w() - 2), "Comment")
       set_winbar(string.format(
         "%%#Title# novibe [%d/%d] %%#Normal# in-scope  ·  <CR> apply  ·  s skip  ·  :w feedback  ·  q quit",
@@ -576,15 +579,19 @@ function M.open_fill(pending, opts)
     for _, h in ipairs(hls) do
       vim.api.nvim_buf_add_highlight(buf, ns, h[2], h[1], 0, -1)
     end
-    -- Treesitter highlighting for change previews: strip prefixes above so the
-    -- parser sees clean code. DiffAdd/DiffDelete backgrounds still show via ns.
+    -- Treesitter highlighting: all renders strip line-number prefixes above so
+    -- the parser sees clean code. DiffAdd/DiffDelete backgrounds still show via ns.
     pcall(vim.treesitter.stop, buf)
-    if q.type == "change" and q.change.file and q.change.file ~= "" then
-      local ft = vim.filetype.match({ filename = q.change.file })
-      if ft then
-        local ts_lang = (vim.treesitter.language.get_lang and vim.treesitter.language.get_lang(ft)) or ft
-        pcall(vim.treesitter.start, buf, ts_lang)
-      end
+    local ts_ft
+    if q.type == "code" then
+      ts_ft = pending.bufnr and vim.api.nvim_buf_is_valid(pending.bufnr)
+              and vim.bo[pending.bufnr].filetype or nil
+    elseif q.type == "change" and q.change.file and q.change.file ~= "" then
+      ts_ft = vim.filetype.match({ filename = q.change.file })
+    end
+    if ts_ft and ts_ft ~= "" then
+      local ts_lang = (vim.treesitter.language.get_lang and vim.treesitter.language.get_lang(ts_ft)) or ts_ft
+      pcall(vim.treesitter.start, buf, ts_lang)
     end
     if vim.api.nvim_win_is_valid(win) then
       vim.api.nvim_win_set_cursor(win, { #content, 0 })
@@ -622,6 +629,9 @@ function M.open_fill(pending, opts)
       end
       local new_lines = vim.split(q.code, "\n", { plain = true })
       vim.api.nvim_buf_set_lines(pending.bufnr, pending.start_line - 1, pending.end_line, false, new_lines)
+      -- Keep pending in sync so a revised code-Q (from :w feedback) splices
+      -- the correct range on re-apply, not the stale original end_line.
+      pending.end_line = pending.start_line + #new_lines - 1
       if opts.on_apply then opts.on_apply(q.code) end
       return true
     else
@@ -827,7 +837,7 @@ function M.open_fill(pending, opts)
   -- Called when initial AI call completes. Builds the question queue and
   -- renders question 1.
   local function finalize(response, usage)
-    if done then return end
+    if done or finalized then return end
     stop_gen_spinner()
     finalized = true
     sending_enabled = true
