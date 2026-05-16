@@ -346,6 +346,6 @@ Write skeleton → visual select → <leader>aa  (or #gen for new files)
                └─────────────────────────────────────────────┘
 ```
 
-The model responds in a structured JSON schema (`{code, message, changes, done}`). `response.code` is the in-scope fill (your selection replaced). `response.changes` is a list of out-of-scope edits — each shown as a find/replace diff with the file path and action in the header. Everything goes through the review queue; nothing is written until you press `<CR>`.
+The model responds in a structured JSON schema (`{code, message, changes, done}`). `response.code` is the in-scope fill (your selection replaced). `response.changes` is a list of out-of-scope edits — each shown as a diff with the file path and action (`replace`, `insert_after`, `insert_before`, `create`, `delete`) in the header. Everything goes through the review queue; nothing is written or deleted until you press `<CR>`.
 
 **Hallucinated paths** are flagged inline in the queue with a `⚠` warning so you can revise the path with `:w` or skip with `s` before wasting a confirm. Combined with `file_context = true` in your profile, hallucinated paths become rare.

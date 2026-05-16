@@ -107,7 +107,7 @@ Run `:NovibeAct` from anywhere, type `#gen <description>`:
 
 If you have a file open or a block selected, novibe injects it as reference context — so `#gen create the repository for this service` while viewing `auth.service.ts` gives the AI the full picture of what to mirror.
 
-AI proposes each new file as a separate queue entry — same `<CR>`/`s`/`:w` review flow, file by file.
+AI proposes each file as a separate queue entry — same `<CR>`/`s`/`:w` review flow. It can create new files, edit existing ones, or delete files that are no longer needed — all proposed as changes you confirm individually.
 
 ---
 
