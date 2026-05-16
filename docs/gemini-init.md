@@ -86,38 +86,52 @@ Finally, tell the user:
 
 ## Step 5 — Optional: session task tracking
 
-Ask the user: "Would you like to enable task tracking? This keeps a running note of your current goal, what's done, what's next, and any blockers — injected into every novibe prompt so you never lose context when switching machines or tools."
+Ask the user: "Would you like to enable task tracking? This keeps a running note of your current state injected into every novibe prompt — so you never lose context when switching machines or tools, or when hitting a rate limit and continuing in a different AI."
 
-If the user says yes:
+If the user says yes, interview them with these questions before writing anything:
 
-1. Append this block to `.no_vibe/convention-project.md` (under its existing content, not replacing it):
+1. "Do you work from a plan — a numbered list of tasks you check off one by one? Or do you prefer to just track the current focus and next step?"
+2. "When you ask an AI to make a plan before coding, do you want that plan saved to task.md so you can continue it on another machine or tool?"
+3. "Do you want to track blockers and open questions?"
+4. "Is there any other context you always want carried across sessions — e.g. active branch, ticket number, decisions already made?"
 
-```
-## always
-- When asked to "update task", rewrite `.no_vibe/task.md` with exactly this structure and nothing else:
+Based on their answers, do the following:
 
-## always
-**Current task:** <one-line goal>
-**Done:**
-- <completed step>
-**Next:** <the immediate next action>
-**Blockers:** <open questions or blockers, or "none">
-```
+1. Generate a `task.md` template that matches how they described their workflow. The only requirement is that it starts with `## always` (so novibe injects it into every prompt). Keep it under 20 lines. Examples:
 
-2. Append this block to `GEMINI.md` (create it if missing):
+   Plan-oriented user:
+   ```
+   ## always
+   **Goal:** <overall goal>
+   **Plan:**
+   - [x] Task 1: <description>
+   - [ ] Task 2: <description> ← current
+   - [ ] Task 3: <description>
+   **Blockers:** none
+   ```
 
-```markdown
-## Session state
-At the start of each session, if `.no_vibe/task.md` exists, read it and acknowledge the current task state in one sentence.
-When asked to "update task", rewrite `.no_vibe/task.md` as instructed in `.no_vibe/convention-project.md`.
-```
+   Focus-oriented user:
+   ```
+   ## always
+   **Working on:** <current focus>
+   **Done so far:** <summary>
+   **Next:** <immediate next action>
+   ```
 
-3. Create `.no_vibe/task.md` with this initial content so novibe can inject it immediately:
+   Write the generated template to `.no_vibe/task.md`.
 
-```
-## always
-**Current task:** (not set — ask the user what they are working on and update this file)
-**Done:** none
-**Next:** none
-**Blockers:** none
-```
+2. Append a matching "update task" rule to `.no_vibe/convention-project.md` that describes the exact format to use — so every AI on every machine produces consistent output. Example:
+
+   ```
+   ## always
+   - When asked to "update task", rewrite `.no_vibe/task.md` keeping the `## always` header and using the format already in the file. Mark completed plan items with [x]. Keep it under 20 lines.
+   ```
+
+3. Append this block to `GEMINI.md` (create it if missing):
+
+   ```markdown
+   ## Session state
+   At the start of each session, if `.no_vibe/task.md` exists, read it and acknowledge the current task state in one sentence.
+   When creating a multi-step plan before coding, write the plan to `.no_vibe/task.md` immediately so it survives across sessions and tools.
+   When asked to "update task", rewrite `.no_vibe/task.md` as instructed in `.no_vibe/convention-project.md`.
+   ```
