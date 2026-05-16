@@ -83,3 +83,41 @@ Finally, tell the user:
 - Add `.no_vibe/diffs.json` to `.gitignore` (transient working state, not meant to be committed)
 - They can split conventions into multiple `convention-*.md` files at any time — novibe loads all of them
 - Ensure `GEMINI_CLI_TRUST_WORKSPACE=true` is set (or trust the workspace interactively once) so non-interactive runs work
+
+## Step 5 — Optional: session task tracking
+
+Ask the user: "Would you like to enable task tracking? This keeps a running note of your current goal, what's done, what's next, and any blockers — injected into every novibe prompt so you never lose context when switching machines or tools."
+
+If the user says yes:
+
+1. Append this block to `.no_vibe/convention-project.md` (under its existing content, not replacing it):
+
+```
+## always
+- When asked to "update task", rewrite `.no_vibe/task.md` with exactly this structure and nothing else:
+
+## always
+**Current task:** <one-line goal>
+**Done:**
+- <completed step>
+**Next:** <the immediate next action>
+**Blockers:** <open questions or blockers, or "none">
+```
+
+2. Append this block to `GEMINI.md` (create it if missing):
+
+```markdown
+## Session state
+At the start of each session, if `.no_vibe/task.md` exists, read it and acknowledge the current task state in one sentence.
+When asked to "update task", rewrite `.no_vibe/task.md` as instructed in `.no_vibe/convention-project.md`.
+```
+
+3. Create `.no_vibe/task.md` with this initial content so novibe can inject it immediately:
+
+```
+## always
+**Current task:** (not set — ask the user what they are working on and update this file)
+**Done:** none
+**Next:** none
+**Blockers:** none
+```
