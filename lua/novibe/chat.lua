@@ -709,6 +709,8 @@ function M.open_fill(pending, opts)
       -- Rebuild the queue from the revised response. A new code-Q is only
       -- accepted if the current head WAS a code-Q (otherwise the in-scope
       -- edit is already applied and the AI was instructed not to return one).
+      -- Tail questions (Q2, Q3...) that the user hasn't seen yet are preserved
+      -- after the AI's revised questions so they don't silently disappear.
       local new_q = {}
       if pending.bufnr and cur_q and cur_q.type == "code"
          and response.code and response.code ~= vim.NIL and response.code ~= "" then
@@ -717,9 +719,13 @@ function M.open_fill(pending, opts)
       for _, ch in ipairs(normalize_changes(response.changes)) do
         table.insert(new_q, { type = "change", change = ch })
       end
+      -- Append unreviewed tail questions (everything after the current head).
+      for i = 2, #questions do
+        table.insert(new_q, questions[i])
+      end
       if #new_q > 0 then
         questions = new_q
-        total = #questions
+        total = #new_q
       end
       -- Always capture the AI's message so render_q can display it inline
       -- above the current question (instead of a fleeting notification).
