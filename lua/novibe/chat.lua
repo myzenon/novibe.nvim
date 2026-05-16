@@ -718,9 +718,14 @@ function M.open_fill(pending, opts)
       end
       -- For #gen there's no in-scope code; don't tell the AI it was applied.
       local applied_note = pending.bufnr and "In-scope code already applied to the buffer. " or ""
+      -- For create actions the file does not exist yet; prevent the AI from
+      -- switching action to "replace" (which would fail on a missing file).
+      local create_note = ch.action == "create"
+        and ' The file does NOT exist yet — keep action="create" and return the full revised content in "replace" with "find":"".'
+        or ""
       hint = string.format(
-        '\n\n[%sUser is reviewing this out-of-scope change: file=%s, action=%s. Description: %s.%s Their feedback below applies to this change. Respond ONLY with revised changes JSON: {"message":...,"changes":[...],"done":true/false}. Do NOT include a "code" field.]',
-        applied_note, ch.file or "?", ch.action or "replace", ch.description or "", exists_note
+        '\n\n[%sUser is reviewing this out-of-scope change: file=%s, action=%s. Description: %s.%s%s Their feedback below applies to this change. Respond ONLY with revised changes JSON: {"message":...,"changes":[...],"done":true/false}. Do NOT include a "code" field.]',
+        applied_note, ch.file or "?", ch.action or "replace", ch.description or "", exists_note, create_note
       )
     else
       hint = '\n\n[Respond ONLY in JSON: {"code":...,"message":...,"changes":[...],"done":true/false}]'
