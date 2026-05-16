@@ -173,6 +173,8 @@ function M.open(initial_response, opts)
 
   local done    = false
   local current_job = nil
+  local job_token   = 0
+  local active_stop = nil
 
   local function set_content(r_lines, r_hls)
     local content = vim.list_extend(vim.deepcopy(r_lines), { MARKER, "" })
@@ -243,7 +245,14 @@ function M.open(initial_response, opts)
       return
     end
 
+    -- Supersede any in-flight send (see open_fill for rationale).
+    if current_job then pcall(function() current_job:kill(9) end); current_job = nil end
+    if active_stop then active_stop(); active_stop = nil end
+    job_token = job_token + 1
+    local my_token = job_token
+
     local stop = start_spinner()
+    active_stop = stop
 
     local reminder = schema_reminder(pending_changes)
     local msg = reply ~= "" and (reply .. reminder) or ("continue" .. reminder)
@@ -259,7 +268,9 @@ function M.open(initial_response, opts)
       cmd,
       { text = true },
       vim.schedule_wrap(function(result)
+        if my_token ~= job_token then return end
         current_job = nil
+        if active_stop == stop then active_stop = nil end
         stop()
         if not vim.api.nvim_win_is_valid(win) then return end
 
@@ -422,6 +433,11 @@ function M.open_fill(pending, opts)
   local finalized       = false
   local sending_enabled = false
   local current_job     = nil
+  -- Monotonic token. Each send() bumps it; the in-flight callback checks its
+  -- captured token before mutating state, so a superseding send() never gets
+  -- its queue stomped by the older job's late callback.
+  local job_token       = 0
+  local active_stop     = nil  -- spinner stop for the in-flight job, if any
   -- Queue of pending questions. Each item is one of:
   --   { type = "code",   code = "..." }     — replaces the original selection
   --   { type = "change", change = {...} }   — one apply.lua change spec
@@ -663,7 +679,17 @@ function M.open_fill(pending, opts)
       end
     end
 
+    -- Supersede any in-flight send so we don't end up with stacking spinners,
+    -- two AI jobs racing on the queue, or a stale callback overwriting fresh
+    -- state. The kill is best-effort; the token check in the callback is the
+    -- actual guard (the OS may still deliver the callback after kill).
+    if current_job then pcall(function() current_job:kill(9) end); current_job = nil end
+    if active_stop then active_stop(); active_stop = nil end
+    job_token = job_token + 1
+    local my_token = job_token
+
     local stop = fill_spinner()
+    active_stop = stop
     local cur_q = questions[1]
     -- Anchor the AI to the question the user is reacting to.
     local hint
@@ -680,9 +706,11 @@ function M.open_fill(pending, opts)
           ch.file
         )
       end
+      -- For #gen there's no in-scope code; don't tell the AI it was applied.
+      local applied_note = pending.bufnr and "In-scope code already applied to the buffer. " or ""
       hint = string.format(
-        '\n\n[Code already applied to the buffer. User is reviewing this out-of-scope change: file=%s, action=%s. Description: %s.%s Their feedback below applies to this change. Respond ONLY with revised changes JSON: {"message":...,"changes":[...],"done":true/false}. Do NOT include a "code" field.]',
-        ch.file or "?", ch.action or "replace", ch.description or "", exists_note
+        '\n\n[%sUser is reviewing this out-of-scope change: file=%s, action=%s. Description: %s.%s Their feedback below applies to this change. Respond ONLY with revised changes JSON: {"message":...,"changes":[...],"done":true/false}. Do NOT include a "code" field.]',
+        applied_note, ch.file or "?", ch.action or "replace", ch.description or "", exists_note
       )
     else
       hint = '\n\n[Respond ONLY in JSON: {"code":...,"message":...,"changes":[...],"done":true/false}]'
@@ -692,7 +720,10 @@ function M.open_fill(pending, opts)
     })
 
     current_job = vim.system(cmd, { text = true }, vim.schedule_wrap(function(result)
+      -- Superseded by a newer send(): silently drop this result.
+      if my_token ~= job_token then return end
       current_job = nil
+      if active_stop == stop then active_stop = nil end
       stop()
       if not vim.api.nvim_win_is_valid(win) then return end
       if result.code ~= 0 or (result.stdout or "") == "" then
