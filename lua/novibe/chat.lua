@@ -812,5 +812,7 @@ end
 
 -- exposed for tests
 M._normalize_changes = normalize_changes
+M._buf_context       = buf_context
+M._file_context      = file_context
 
 return M
