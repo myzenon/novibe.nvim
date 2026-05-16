@@ -110,6 +110,44 @@ describe("apply — error cases", function()
   end)
 end)
 
+describe("apply — create action", function()
+  it("writes a new file with the given content", function()
+    local path = vim.fn.tempname() .. "_create_test.lua"
+    local ok, err = apply.apply({ file = path, action = "create", find = "", replace = "local x = 1\nreturn x" })
+    assert.is_true(ok)
+    assert.is_nil(err)
+    assert.equals("local x = 1\nreturn x", read_file(path))
+    vim.fn.delete(path)
+  end)
+
+  it("creates missing parent directories", function()
+    local base = vim.fn.tempname()
+    vim.fn.mkdir(base, "p")
+    local path = base .. "/nested/dir/file.lua"
+    local ok = apply.apply({ file = path, action = "create", find = "", replace = "-- hi" })
+    assert.is_true(ok)
+    assert.equals("-- hi", read_file(path))
+    vim.fn.delete(base, "rf")
+  end)
+
+  it("returns false if the file already exists", function()
+    local path = vim.fn.tempname()
+    vim.fn.writefile({ "existing" }, path)
+    local ok, err = apply.apply({ file = path, action = "create", find = "", replace = "new" })
+    assert.is_false(ok)
+    assert.truthy(err:find("already exists"))
+    assert.equals("existing", read_file(path))  -- original untouched
+    vim.fn.delete(path)
+  end)
+
+  it("returns false when replace is missing", function()
+    local path = vim.fn.tempname() .. "_no_replace.lua"
+    local ok, err = apply.apply({ file = path, action = "create", find = "" })
+    assert.is_false(ok)
+    assert.truthy(err:find("missing 'replace'"))
+  end)
+end)
+
 describe("apply_all", function()
   it("applies multiple changes in order", function()
     local path = tmp_file("aaa\nbbb\nccc")
