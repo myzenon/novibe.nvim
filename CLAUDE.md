@@ -67,7 +67,9 @@ Visual select skeleton (or cursor on line)
        · <CR>            → apply this question (splice code for code-Q, apply.lua for change-Q), advance
        · s               → skip this question (don't apply), advance
        · :w <text>       → revise via AI; prompt anchors the AI to the current head Q.
-                           AI's response replaces the queue (new total = #code-Q + #changes).
+                           AI's revised questions replace the head Q (and any change-Qs the AI
+                           already covers, by file). Unreviewed tail questions (Q2, Q3…) are
+                           preserved and appended after the AI's new questions.
                            Code-Q is only re-accepted if the current head was a code-Q.
        · :w all  /  :w * → apply every remaining question (in order) and close
        · q               → quit; previously-applied questions stay, remaining are dropped

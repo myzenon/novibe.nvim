@@ -86,7 +86,7 @@ You can also run `:NovibeAct` with the cursor on a single line — no visual sel
 |---|---|
 | `<CR>` | Apply this change and advance |
 | `s` | Skip (don't apply), advance |
-| `:w <text>` | Send feedback to the AI; response replaces the queue |
+| `:w <text>` | Send feedback to the AI; AI revises the current question; unreviewed questions are preserved |
 | `:w all` | Apply every remaining change and close |
 | `q` | Quit; already-applied changes stay |
 
