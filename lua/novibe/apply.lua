@@ -77,12 +77,27 @@ function M.apply(change)
   if type(change.file) ~= "string" or change.file == "" then
     return false, "change is missing 'file'"
   end
-  if type(change.replace) ~= "string" then
-    return false, "change for " .. change.file .. " is missing 'replace'"
-  end
 
   local action = (type(change.action) == "string" and change.action ~= "")
     and change.action or "replace"
+
+  -- delete: remove an existing file
+  if action == "delete" then
+    local abs = vim.fn.fnamemodify(change.file, ":p")
+    if vim.fn.filereadable(abs) == 0 then
+      return false, "file not found: " .. change.file
+    end
+    local bufnr = vim.fn.bufnr(abs)
+    if bufnr ~= -1 then
+      vim.api.nvim_buf_delete(bufnr, { force = true })
+    end
+    vim.fn.delete(abs)
+    return true, nil
+  end
+
+  if type(change.replace) ~= "string" then
+    return false, "change for " .. change.file .. " is missing 'replace'"
+  end
 
   -- create: write a brand-new file; no find/replace matching needed
   if action == "create" then

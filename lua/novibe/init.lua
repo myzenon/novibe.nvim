@@ -25,9 +25,10 @@ local GEN_SYSTEM = [[Generate new files as requested. Respond ONLY in JSON — n
   ],
   "done": false
 }
-Use action "create" for new files. "find" must be empty string for create.
-Set done:false so the user reviews each file before it is written.
-If a file already exists and needs editing, use action "replace" with a proper "find" field instead.]]
+Use action "create" for new files ("find" must be empty string).
+Use action "replace" with a proper "find" field to edit an existing file.
+Use action "delete" to remove a file that is no longer needed ("find" and "replace" must be empty strings).
+Set done:false so the user reviews each file before it is written or deleted.]]
 
 local ns = vim.api.nvim_create_namespace("novibe")
 local spinner_frames = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }

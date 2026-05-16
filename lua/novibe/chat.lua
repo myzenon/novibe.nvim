@@ -499,33 +499,52 @@ function M.open_fill(pending, opts)
       local ch = q.change
       push(string.format("[%d/%d] Out-of-scope: %s  [%s]",
         idx, total, ch.file or "?", ch.action or "replace"), "Title")
-      -- Surface hallucinated file paths up-front so the user doesn't waste a
-      -- <CR> on something apply.lua will reject.
       local abs = ch.file and vim.fn.fnamemodify(ch.file, ":p") or ""
-      if ch.file and ch.file ~= "" and vim.fn.filereadable(abs) == 0 then
-        push("│  ⚠ file does not exist — likely a hallucinated path. Revise with :w or skip with `s`.", "DiagnosticError")
-      end
-      if ch.description and ch.description ~= "" then
-        push("│  " .. ch.description, "Comment")
-      end
-      push("│")
-      -- Show file context around the find block so the user knows where in
-      -- the file this change lands (only when find is non-empty).
-      local ctx_before, ctx_after, match_start = {}, {}, nil
-      if ch.find and ch.find ~= "" and ch.file and ch.file ~= "" then
-        ctx_before, ctx_after, match_start = file_context(ch.file, ch.find, CONTEXT_LINES)
-      end
-      local find_lines = ch.find and ch.find ~= "" and vim.split(vim.trim(ch.find), "\n", { plain = true }) or {}
-      local before_start = match_start and (match_start - #ctx_before) or nil
-      for i, l in ipairs(ctx_before) do push(lnum(before_start and before_start + i - 1) .. "    " .. l, "Comment") end
-      for i, l in ipairs(find_lines) do push(lnum(match_start and match_start + i - 1) .. "  - " .. l, "DiffDelete") end
-      if ch.replace and ch.replace ~= "" then
-        for _, l in ipairs(vim.split(vim.trim(ch.replace), "\n", { plain = true })) do
-          push(lnum(nil) .. "  + " .. l, "DiffAdd")
+      local file_exists = ch.file and ch.file ~= "" and vim.fn.filereadable(abs) == 1
+      if ch.action == "delete" then
+        -- For delete: warn if file is missing (nothing to delete), otherwise
+        -- show the full file as removed lines so the user sees what goes away.
+        if not file_exists then
+          push("│  ⚠ file does not exist — nothing to delete.", "DiagnosticError")
+        else
+          push("│  ⚠ This file will be permanently deleted.", "DiagnosticWarn")
         end
+        if ch.description and ch.description ~= "" then
+          push("│  " .. ch.description, "Comment")
+        end
+        push("│")
+        if file_exists then
+          local file_lines = vim.fn.readfile(abs)
+          for i, l in ipairs(file_lines) do push(lnum(i) .. "  - " .. l, "DiffDelete") end
+        end
+      else
+        -- Surface hallucinated file paths up-front so the user doesn't waste a
+        -- <CR> on something apply.lua will reject.
+        if not file_exists and ch.action ~= "create" then
+          push("│  ⚠ file does not exist — likely a hallucinated path. Revise with :w or skip with `s`.", "DiagnosticError")
+        end
+        if ch.description and ch.description ~= "" then
+          push("│  " .. ch.description, "Comment")
+        end
+        push("│")
+        -- Show file context around the find block so the user knows where in
+        -- the file this change lands (only when find is non-empty).
+        local ctx_before, ctx_after, match_start = {}, {}, nil
+        if ch.find and ch.find ~= "" and ch.file and ch.file ~= "" then
+          ctx_before, ctx_after, match_start = file_context(ch.file, ch.find, CONTEXT_LINES)
+        end
+        local find_lines = ch.find and ch.find ~= "" and vim.split(vim.trim(ch.find), "\n", { plain = true }) or {}
+        local before_start = match_start and (match_start - #ctx_before) or nil
+        for i, l in ipairs(ctx_before) do push(lnum(before_start and before_start + i - 1) .. "    " .. l, "Comment") end
+        for i, l in ipairs(find_lines) do push(lnum(match_start and match_start + i - 1) .. "  - " .. l, "DiffDelete") end
+        if ch.replace and ch.replace ~= "" then
+          for _, l in ipairs(vim.split(vim.trim(ch.replace), "\n", { plain = true })) do
+            push(lnum(nil) .. "  + " .. l, "DiffAdd")
+          end
+        end
+        local after_start = match_start and (match_start + #find_lines) or nil
+        for i, l in ipairs(ctx_after) do push(lnum(after_start and after_start + i - 1) .. "    " .. l, "Comment") end
       end
-      local after_start = match_start and (match_start + #find_lines) or nil
-      for i, l in ipairs(ctx_after) do push(lnum(after_start and after_start + i - 1) .. "    " .. l, "Comment") end
       push("└" .. string.rep("─", inner_w() - 2), "Comment")
       set_winbar(string.format(
         "%%#WarningMsg# [%d/%d] out-of-scope %%#Normal# ·  <CR> apply  ·  s skip  ·  :w feedback  ·  :w all  ·  q quit",
@@ -643,7 +662,8 @@ function M.open_fill(pending, opts)
       local ch = cur_q.change
       local abs = ch.file and vim.fn.fnamemodify(ch.file, ":p") or ""
       local exists_note = ""
-      if ch.file and ch.file ~= "" and vim.fn.filereadable(abs) == 0 then
+      if ch.file and ch.file ~= "" and vim.fn.filereadable(abs) == 0
+          and ch.action ~= "create" and ch.action ~= "delete" then
         exists_note = string.format(
           ' IMPORTANT: the path "%s" does NOT exist in this project — you likely hallucinated it. Use a path that actually exists, or drop this change.',
           ch.file

@@ -38,9 +38,9 @@ Schema:
     {
       "file": string,         // relative path from project root
       "description": string,  // human-readable summary of the change
-      "action": string,       // "replace" | "insert_after" | "insert_before"
-      "find": string,         // exact existing code block to locate (anchor for all actions)
-      "replace": string       // for "replace": new code; for "insert_after"/"insert_before": code to insert
+      "action": string,       // "replace" | "insert_after" | "insert_before" | "delete"
+      "find": string,         // exact existing code block to locate (anchor for all actions except "delete")
+      "replace": string       // for "replace": new code; for "insert_after"/"insert_before": code to insert; empty for "delete"
     }
   ],
   "done": boolean         // true = apply all changes now and close, false = wait for user reply
@@ -49,7 +49,7 @@ Schema:
 Rules:
 - "code" contains ONLY the lines that were in the selection, modified as requested. Never include lines from outside the selection.
 - If the change requires modifications outside the selection (imports, types, other files), put them in "changes". Never include them in "code".
-- For "changes" entries: use "replace" when modifying existing code, "insert_after" when adding new code after an anchor, "insert_before" when adding before. "find" must always be an existing block verbatim from the file.
+- For "changes" entries: use "replace" when modifying existing code, "insert_after" when adding new code after an anchor, "insert_before" when adding before. "find" must always be an existing block verbatim from the file. Use "delete" to remove an entire file — set "find" and "replace" to empty strings.
 - CRITICAL: every "file" path in "changes" MUST reference a file that already exists in the project. Do NOT invent file paths. Do NOT split inline code into a new file unless the user explicitly asks. If you want to add new code (helper, sub-component, type), put it in the file the user is currently editing.
 - If a "Project files" list is provided in the prompt, only reference paths from that list.
 - Set "done": false if you have a question or want the user to review changes before applying.

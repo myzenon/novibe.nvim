@@ -176,7 +176,7 @@ Claude always responds in this schema (enforced by system prompt):
     {
       "file": "relative/path/from/project/root",
       "description": "human-readable summary",
-      "action": "replace | insert_after | insert_before",
+      "action": "replace | insert_after | insert_before | delete",
       "find": "exact existing block to locate by content",
       "replace": "new code"
     }
@@ -198,6 +198,7 @@ Never uses line numbers. Two-pass approach:
 - `insert_after` — find anchor, insert new code after it
 - `insert_before` — find anchor, insert new code before it
 - `create` — write a brand-new file; `find` must be `""`. Errors if the file already exists.
+- `delete` — remove an existing file; `find` and `replace` must be `""`. Closes any open buffer for that file.
 
 ## Convention, Learned Rule & Knowledge Base Files
 
