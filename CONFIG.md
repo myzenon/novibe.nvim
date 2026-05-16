@@ -31,6 +31,11 @@ The fastest way to bootstrap conventions is to ask your AI CLI to do it:
 2. Paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/opencode-init.md and follow the instructions."`
 3. The agent generates `.no_vibe/convention-project.md` and appends the novibe format spec to `AGENTS.md`.
 
+**Gemini CLI:**
+1. Open a terminal in your project root: `gemini` (trust the workspace when prompted)
+2. Paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/gemini-init.md and follow the instructions."`
+3. The agent generates `.no_vibe/convention-project.md` and appends the novibe format spec to `GEMINI.md`.
+
 You can add more `convention-*.md` files later (`convention-frontend.md`, `convention-style.md`, etc.). All matching files are loaded and merged.
 
 ---

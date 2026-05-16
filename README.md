@@ -19,8 +19,7 @@ You design the structure. You write the skeleton — function signature, comment
 - Neovim 0.10+
 - One of: [Claude Code CLI](https://claude.ai/code) (`claude login`), [opencode](https://opencode.ai/) (`opencode auth login`), or [Gemini CLI](https://geminicli.com/) (`gemini auth`)
 - [lazy.nvim](https://github.com/folke/lazy.nvim)
-
-Optional: [snacks.nvim](https://github.com/folke/snacks.nvim) for the `<C-f>` file picker in the input float.
+- [snacks.nvim](https://github.com/folke/snacks.nvim) — file picker (`<C-f>`) in the input float
 
 ---
 
@@ -29,7 +28,8 @@ Optional: [snacks.nvim](https://github.com/folke/snacks.nvim) for the `<C-f>` fi
 ```lua
 {
   "myzenon/novibe.nvim",
-  cmd = { "NovibeAct", "NovibeConsult", "NovibeProfile", "NovibeDistill", "NovibePromote", "NovibeReset", "NovibeStatus", "NovibeConventions", "NovibeLearns" },
+  dependencies = { "folke/snacks.nvim" },
+  cmd = { "NovibeAct", "NovibeConsult", "NovibeConsultPrompt", "NovibeProfile", "NovibeDistill", "NovibePromote", "NovibeReset", "NovibeStatus", "NovibeConventions", "NovibeLearns" },
   keys = {
     { "<leader>aa", ":NovibeAct<CR>", mode = "v", desc = "novibe: fill implementation" },
     { "<leader>aa", ":NovibeAct<CR>", mode = "n", desc = "novibe: act on current line" },
@@ -58,9 +58,9 @@ Bootstrap your project conventions by running your AI CLI in the project root:
 
 - **Claude Code** — start `claude`, then paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/claude-init.md and follow the instructions."`
 - **opencode** — start `opencode`, then paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/opencode-init.md and follow the instructions."`
-- **Gemini CLI** — start `gemini`, trust the workspace when prompted, then paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/claude-init.md and follow the instructions."` (the claude init prompt is provider-agnostic enough to work)
+- **Gemini CLI** — start `gemini`, trust the workspace when prompted, then paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/gemini-init.md and follow the instructions."`
 
-The agent analyzes your project, generates `.no_vibe/convention-project.md`, and writes the novibe format spec into `CLAUDE.md` / `AGENTS.md` so it auto-loads in future sessions.
+The agent analyzes your project, generates `.no_vibe/convention-project.md`, and writes the novibe format spec into `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` so it auto-loads in future sessions.
 
 See [CONFIG.md → Fresh project setup](./CONFIG.md#fresh-project-setup) for details.
 
@@ -111,6 +111,7 @@ AI proposes each new file as a separate queue entry — same `<CR>`/`s`/`:w` rev
 | -------------------- | ------------------------------------------------------------ |
 | `:NovibeAct`         | Fill selection (or current line) · `#gen <desc>` to generate new files · `#teach <reason>` to capture style evidence |
 | `:NovibeConsult`     | Open interactive consult session (vsplit); claude / gemini: context auto-injected; opencode: manual |
+| `:NovibeConsultPrompt` | Push consult seed into the active consult terminal (required for opencode; works with any provider) |
 | `:NovibeProfile`     | Two-step picker: choose slot (Act / Consult), then profile   |
 | `:NovibeReset`       | Start a fresh session on the next fill                       |
 | `:NovibeStatus`      | Show profile, session, cost, ctx %, loaded rule files        |
