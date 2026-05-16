@@ -37,7 +37,6 @@ local loading_messages = {
   "filling the blanks…",
   "connecting the dots…",
   "following your lead…",
-  "reading the comments…",
   "doing the boring part…",
   "translating intent…",
   "implementing your vision…",
@@ -45,8 +44,17 @@ local loading_messages = {
   "no vibes, just work…",
   "respecting the architecture…",
   "staying in scope…",
-  "asking claude nicely…",
   "not redesigning anything…",
+  "writing the boilerplate…",
+  "you drive, I type…",
+  "filling gaps, not rewriting…",
+  "on it…",
+  "decoding your skeleton…",
+  "not touching the architecture…",
+  "making it compile (probably)…",
+  "keeping it boring…",
+  "just the implementation…",
+  "staying in your lane…",
 }
 
 local function random_loading_msg()
