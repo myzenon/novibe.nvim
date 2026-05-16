@@ -328,6 +328,16 @@ function M.open_fill(pending, opts)
   end
   set_winbar(TITLE_GENERATING)
 
+  -- Animate the winbar during initial generation (stopped in finalize/close).
+  local gen_frame = 1
+  local gen_timer = vim.uv.new_timer()
+  gen_timer:start(80, 80, vim.schedule_wrap(function()
+    if not vim.api.nvim_win_is_valid(win) then gen_timer:stop(); gen_timer:close(); return end
+    gen_frame = (gen_frame % #spinner_frames) + 1
+    set_winbar("%#Title# novibe %#Normal#  ·  " .. spinner_frames[gen_frame] .. " generating…  ·  q cancel")
+  end))
+  local function stop_gen_spinner() pcall(function() gen_timer:stop(); gen_timer:close() end) end
+
   local done            = false
   local finalized       = false
   local sending_enabled = false
@@ -347,6 +357,7 @@ function M.open_fill(pending, opts)
 
   local function close()
     done = true
+    stop_gen_spinner()
     if current_job then pcall(function() current_job:kill(9) end); current_job = nil end
     if vim.api.nvim_get_current_win() == win then vim.cmd("stopinsert") end
     if vim.api.nvim_win_is_valid(win) then vim.api.nvim_win_close(win, true) end
@@ -614,6 +625,7 @@ function M.open_fill(pending, opts)
   -- renders question 1.
   local function finalize(response, usage)
     if done then return end
+    stop_gen_spinner()
     finalized = true
     sending_enabled = true
     if usage and usage.session_id then
