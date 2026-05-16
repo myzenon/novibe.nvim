@@ -532,12 +532,11 @@ function M.open_fill(pending, opts)
         push("│")
         -- Show file context around the find block so the user knows where in
         -- the file this change lands (only when find is non-empty).
-        local ctx_before, ctx_after, match_start = {}, {}, nil
+        local ctx_before, ctx_after = {}, {}
         if ch.find and ch.find ~= "" and ch.file and ch.file ~= "" then
-          ctx_before, ctx_after, match_start = file_context(ch.file, ch.find, CONTEXT_LINES)
+          ctx_before, ctx_after = file_context(ch.file, ch.find, CONTEXT_LINES)
         end
         local find_lines = ch.find and ch.find ~= "" and vim.split(vim.trim(ch.find), "\n", { plain = true }) or {}
-        local before_start = match_start and (match_start - #ctx_before) or nil
         for _, l in ipairs(ctx_before)  do push(l, "Comment")    end
         for _, l in ipairs(find_lines)  do push(l, "DiffDelete") end
         if ch.replace and ch.replace ~= "" then
@@ -716,12 +715,20 @@ function M.open_fill(pending, opts)
          and response.code and response.code ~= vim.NIL and response.code ~= "" then
         table.insert(new_q, { type = "code", code = vim.trim(response.code) })
       end
+      local seen_files = {}
       for _, ch in ipairs(normalize_changes(response.changes)) do
+        if ch.file and ch.file ~= "" then seen_files[ch.file] = true end
         table.insert(new_q, { type = "change", change = ch })
       end
-      -- Append unreviewed tail questions (everything after the current head).
+      -- Append unreviewed tail questions, skipping any change-Q whose file
+      -- the AI already revised (those would just collide on apply).
       for i = 2, #questions do
-        table.insert(new_q, questions[i])
+        local q = questions[i]
+        if q.type == "change" and q.change.file and seen_files[q.change.file] then
+          -- skip duplicate
+        else
+          table.insert(new_q, q)
+        end
       end
       if #new_q > 0 then
         questions = new_q
