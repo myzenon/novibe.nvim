@@ -2,7 +2,7 @@ local apply = require("novibe.apply")
 
 local M = {}
 
-local MARKER = "── reply ──────────────────────────────────────────────────────────────────────"
+local MARKER = "── <CR> accept  ·  type feedback + :w to send ──────────────────────────────────"
 
 local spinner_frames = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
 
@@ -23,9 +23,45 @@ local function normalize_changes(c)
   return c
 end
 
+local CONTEXT_LINES = 3
+
 local function split_width()
   -- 40% of editor width, clamped to a comfortable reading range
   return math.min(math.max(math.floor(vim.o.columns * 0.4), 50), 90)
+end
+
+-- Return N lines before/after a selection in a buffer (0-based API, 1-based args).
+local function buf_context(bufnr, start_line, end_line, n)
+  if not vim.api.nvim_buf_is_valid(bufnr) then return {}, {} end
+  local total = vim.api.nvim_buf_line_count(bufnr)
+  local before = vim.api.nvim_buf_get_lines(bufnr, math.max(0, start_line - 1 - n), start_line - 1, false)
+  local after  = vim.api.nvim_buf_get_lines(bufnr, end_line, math.min(total, end_line + n), false)
+  return before, after
+end
+
+-- Search file for find_text and return N context lines before/after it.
+-- Also returns match_start (1-based line number) so callers can render line numbers.
+-- Returns empty tables + nil if the file can't be read or find_text isn't located.
+local function file_context(filepath, find_text, n)
+  local abs = vim.fn.fnamemodify(filepath, ":p")
+  local ok, content = pcall(vim.fn.readfile, abs)
+  if not ok or not content then return {}, {}, nil end
+  local find_lines = vim.split(vim.trim(find_text), "\n", { plain = true })
+  local nf = #find_lines
+  local match_start = nil
+  for i = 1, #content - nf + 1 do
+    local hit = true
+    for j = 1, nf do
+      if vim.trim(content[i + j - 1]) ~= vim.trim(find_lines[j]) then hit = false; break end
+    end
+    if hit then match_start = i; break end
+  end
+  if not match_start then return {}, {}, nil end
+  local match_end = match_start + nf - 1
+  local before, after = {}, {}
+  for i = math.max(1, match_start - n), match_start - 1 do table.insert(before, content[i]) end
+  for i = match_end + 1, math.min(#content, match_end + n) do table.insert(after, content[i]) end
+  return before, after, match_start
 end
 
 -- Build lines + highlight specs [{line (0-based), hl}] for the read-only section.
@@ -275,10 +311,32 @@ function M.open(initial_response, opts)
     close()
   end
 
+  local function smart_insert()
+    local all = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    local marker_row = nil
+    for i = #all, 1, -1 do
+      if all[i] == MARKER then marker_row = i; break end
+    end
+    if not marker_row then vim.cmd("startinsert"); return end
+    local cursor_row = vim.api.nvim_win_get_cursor(win)[1]
+    if cursor_row > marker_row then
+      vim.cmd("startinsert")
+    else
+      vim.api.nvim_win_set_cursor(win, { #all, 0 })
+      vim.cmd("startinsert!")
+    end
+  end
+
   local kopts = { buffer = buf, nowait = true }
-  vim.keymap.set("n", "q",     close,   kopts)
-  vim.keymap.set("n", "<Esc>", close,   kopts)
-  vim.keymap.set("n", "<CR>",  confirm, kopts)
+  vim.keymap.set("n", "q",     close,        kopts)
+  vim.keymap.set("n", "<Esc>", close,        kopts)
+  vim.keymap.set("n", "<CR>",  confirm,      kopts)
+  vim.keymap.set("n", "i",     smart_insert, kopts)
+  vim.keymap.set("n", "a",     smart_insert, kopts)
+  vim.keymap.set("n", "A",     smart_insert, kopts)
+  vim.keymap.set("n", "I",     smart_insert, kopts)
+  vim.keymap.set("n", "o",     smart_insert, kopts)
+  vim.keymap.set("n", "O",     smart_insert, kopts)
 end
 
 -- Open the fill-preview chat. Returns { push, finalize, cancel }.
@@ -338,6 +396,24 @@ function M.open_fill(pending, opts)
   end))
   local function stop_gen_spinner() pcall(function() gen_timer:stop(); gen_timer:close() end) end
 
+  local pending_ns  = vim.api.nvim_create_namespace("novibe_pending")
+
+  local function set_pending_indicator()
+    if not (pending.bufnr and vim.api.nvim_buf_is_valid(pending.bufnr)) then return end
+    vim.api.nvim_buf_set_extmark(pending.bufnr, pending_ns, pending.end_line - 1, 0, {
+      virt_lines = {
+        { { "  ▸ novibe: review & accept in chat  ·  <CR> apply  ·  s skip  ·  q quit", "DiagnosticWarn" } },
+      },
+      virt_lines_above = false,
+    })
+  end
+
+  local function clear_pending_indicator()
+    if pending.bufnr and vim.api.nvim_buf_is_valid(pending.bufnr) then
+      vim.api.nvim_buf_clear_namespace(pending.bufnr, pending_ns, 0, -1)
+    end
+  end
+
   local done            = false
   local finalized       = false
   local sending_enabled = false
@@ -358,6 +434,7 @@ function M.open_fill(pending, opts)
   local function close()
     done = true
     stop_gen_spinner()
+    clear_pending_indicator()
     if current_job then pcall(function() current_job:kill(9) end); current_job = nil end
     if vim.api.nvim_get_current_win() == win then vim.cmd("stopinsert") end
     if vim.api.nvim_win_is_valid(win) then vim.api.nvim_win_close(win, true) end
@@ -389,12 +466,31 @@ function M.open_fill(pending, opts)
       push("")
     end
 
+    local function lnum(n) return n and string.format("%4d ", n) or "     " end
+
     if q.type == "code" then
       push(string.format("[%d/%d] In-scope code (will replace your selection):", idx, total), "Title")
       push("")
-      for _, l in ipairs(vim.split(q.code or "", "\n", { plain = true })) do push(l) end
+      -- Show surrounding context from the working buffer so the user knows
+      -- where the new code lands (original selection as -, new code as +).
+      local orig_lines = {}
+      if pending.bufnr and vim.api.nvim_buf_is_valid(pending.bufnr) then
+        orig_lines = vim.api.nvim_buf_get_lines(
+          pending.bufnr, pending.start_line - 1, pending.end_line, false)
+      end
+      local ctx_before, ctx_after = {}, {}
+      if pending.bufnr and vim.api.nvim_buf_is_valid(pending.bufnr) then
+        ctx_before, ctx_after = buf_context(pending.bufnr, pending.start_line, pending.end_line, CONTEXT_LINES)
+      end
+      local before_start = pending.start_line - #ctx_before
+      for i, l in ipairs(ctx_before) do push(lnum(before_start + i - 1) .. "    " .. l, "Comment") end
+      for i, l in ipairs(orig_lines) do push(lnum(pending.start_line + i - 1) .. "  - " .. l, "DiffDelete") end
+      for _, l in ipairs(vim.split(q.code or "", "\n", { plain = true })) do push(lnum(nil) .. "  + " .. l, "DiffAdd") end
+      local after_start = pending.end_line + 1
+      for i, l in ipairs(ctx_after) do push(lnum(after_start + i - 1) .. "    " .. l, "Comment") end
+      push("└" .. string.rep("─", inner_w() - 2), "Comment")
       set_winbar(string.format(
-        "%%#Title# novibe [%d/%d] %%#Normal# in-scope  ·  <CR> apply  ·  s skip  ·  :w revise  ·  q quit",
+        "%%#Title# novibe [%d/%d] %%#Normal# in-scope  ·  <CR> apply  ·  s skip  ·  :w feedback  ·  q quit",
         idx, total
       ))
     else
@@ -411,19 +507,26 @@ function M.open_fill(pending, opts)
         push("│  " .. ch.description, "Comment")
       end
       push("│")
-      if ch.find and ch.find ~= "" then
-        for _, l in ipairs(vim.split(vim.trim(ch.find), "\n", { plain = true })) do
-          push("  - " .. l, "DiffDelete")
-        end
+      -- Show file context around the find block so the user knows where in
+      -- the file this change lands (only when find is non-empty).
+      local ctx_before, ctx_after, match_start = {}, {}, nil
+      if ch.find and ch.find ~= "" and ch.file and ch.file ~= "" then
+        ctx_before, ctx_after, match_start = file_context(ch.file, ch.find, CONTEXT_LINES)
       end
+      local find_lines = ch.find and ch.find ~= "" and vim.split(vim.trim(ch.find), "\n", { plain = true }) or {}
+      local before_start = match_start and (match_start - #ctx_before) or nil
+      for i, l in ipairs(ctx_before) do push(lnum(before_start and before_start + i - 1) .. "    " .. l, "Comment") end
+      for i, l in ipairs(find_lines) do push(lnum(match_start and match_start + i - 1) .. "  - " .. l, "DiffDelete") end
       if ch.replace and ch.replace ~= "" then
         for _, l in ipairs(vim.split(vim.trim(ch.replace), "\n", { plain = true })) do
-          push("  + " .. l, "DiffAdd")
+          push(lnum(nil) .. "  + " .. l, "DiffAdd")
         end
       end
+      local after_start = match_start and (match_start + #find_lines) or nil
+      for i, l in ipairs(ctx_after) do push(lnum(after_start and after_start + i - 1) .. "    " .. l, "Comment") end
       push("└" .. string.rep("─", inner_w() - 2), "Comment")
       set_winbar(string.format(
-        "%%#WarningMsg# [%d/%d] out-of-scope %%#Normal# ·  <CR> apply  ·  s skip  ·  :w revise  ·  :w all  ·  q quit",
+        "%%#WarningMsg# [%d/%d] out-of-scope %%#Normal# ·  <CR> apply  ·  s skip  ·  :w feedback  ·  :w all  ·  q quit",
         idx, total
       ))
     end
@@ -607,11 +710,33 @@ function M.open_fill(pending, opts)
     callback = function() vim.bo[buf].modified = false; send() end,
   })
 
+  local function smart_insert()
+    local all = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    local marker_row = nil
+    for i = #all, 1, -1 do
+      if all[i] == MARKER then marker_row = i; break end
+    end
+    if not marker_row then vim.cmd("startinsert"); return end
+    local cursor_row = vim.api.nvim_win_get_cursor(win)[1]
+    if cursor_row > marker_row then
+      vim.cmd("startinsert")
+    else
+      vim.api.nvim_win_set_cursor(win, { #all, 0 })
+      vim.cmd("startinsert!")
+    end
+  end
+
   local kopts = { buffer = buf, nowait = true }
-  vim.keymap.set("n", "q",    close,   kopts)
-  vim.keymap.set("n", "<Esc>", close,  kopts)
-  vim.keymap.set("n", "<CR>", confirm, kopts)
-  vim.keymap.set("n", "s",    skip,    kopts)
+  vim.keymap.set("n", "q",     close,        kopts)
+  vim.keymap.set("n", "<Esc>", close,        kopts)
+  vim.keymap.set("n", "<CR>",  confirm,      kopts)
+  vim.keymap.set("n", "s",     skip,         kopts)
+  vim.keymap.set("n", "i",     smart_insert, kopts)
+  vim.keymap.set("n", "a",     smart_insert, kopts)
+  vim.keymap.set("n", "A",     smart_insert, kopts)
+  vim.keymap.set("n", "I",     smart_insert, kopts)
+  vim.keymap.set("n", "o",     smart_insert, kopts)
+  vim.keymap.set("n", "O",     smart_insert, kopts)
 
   -- During streaming, render partial code raw (no MARKER, no reply area).
   -- Once finalize() runs, the question queue takes over and push() becomes a no-op.
@@ -669,6 +794,7 @@ function M.open_fill(pending, opts)
       total, table.concat(parts, " + ")
     ), code_count + change_count > 1 and vim.log.levels.WARN or vim.log.levels.INFO)
 
+    set_pending_indicator()
     render_q()
 
     -- Move focus to chat window only if user was in normal mode, so <CR>
