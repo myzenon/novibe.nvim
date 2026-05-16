@@ -68,21 +68,40 @@ See [CONFIG.md → Fresh project setup](./CONFIG.md#fresh-project-setup) for det
 
 ## Usage
 
+### Fill a skeleton
+
 1. Write a skeleton — function signature + comments describing what it should do
 2. Visually select the block (`V` then move, or `vi{` etc.)
 3. Press `<leader>aa` (or run `:'<,'>NovibeAct`)
 4. Type an optional short instruction in the floating input → `:w` to submit
-5. Implementation is spliced in place
+5. A fill-preview split opens on the right; code streams in as it arrives
 
 You can also run `:NovibeAct` with the cursor on a single line — no visual selection needed.
 
 **Input float:** `:w` submit · `<Esc>`/`q` cancel · `<C-f>` file picker (insert mode)
 
-**Out-of-scope changes** (imports, types, other files) open a side panel showing diffs:
+**Review queue** — when the stream finishes, each proposed change appears one at a time:
 
-- `ok` / `yes` / `lgtm` + `:w` — apply all
-- Free-form text + `:w` — request revision from the model
-- `q` — discard
+| Key | Action |
+|---|---|
+| `<CR>` | Apply this change and advance |
+| `s` | Skip (don't apply), advance |
+| `:w <text>` | Ask the AI to revise; response replaces the queue |
+| `:w all` | Apply every remaining change and close |
+| `q` | Quit; already-applied changes stay |
+
+In-scope code (your selection) appears first. Out-of-scope changes (imports, types, other files) follow, shown as find/replace diffs with the file path in the header. Hallucinated paths are flagged inline.
+
+### Generate new files
+
+Run `:NovibeAct` from anywhere (no selection needed), type `#gen <description>`:
+
+```
+#gen create a React UserProfile component with name/avatar props using shadcn Card
+#gen create a db repository for the User model
+```
+
+AI proposes each new file as a separate queue entry — same `<CR>`/`s`/`:w` review flow, file by file.
 
 ---
 
@@ -90,7 +109,7 @@ You can also run `:NovibeAct` with the cursor on a single line — no visual sel
 
 | Command              | What                                                         |
 | -------------------- | ------------------------------------------------------------ |
-| `:NovibeAct`         | Fill selection (or current line)                             |
+| `:NovibeAct`         | Fill selection (or current line) · `#gen <desc>` to generate new files · `#teach <reason>` to capture style evidence |
 | `:NovibeConsult`     | Open interactive consult session (vsplit); claude / gemini: context auto-injected; opencode: manual |
 | `:NovibeProfile`     | Two-step picker: choose slot (Act / Consult), then profile   |
 | `:NovibeReset`       | Start a fresh session on the next fill                       |

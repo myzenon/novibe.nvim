@@ -139,17 +139,25 @@ novibe loads rules from these sources (in order):
 1. `NO_VIBE.md` at project root — optional single-file shortcut
 2. `.no_vibe/convention-*.md` — human-written rules. Any number of files, named freely after `convention-`. Split however suits you (by topic, layer, ownership).
 3. `.no_vibe/learned-*.md` — auto-distilled from `#teach` (don't edit by hand)
+4. `.no_vibe/map-*.md` — dependency graph: call chains, inheritance, who depends on what
+5. `.no_vibe/rule-*.md` — behavioral constraints: how to interact with each area
+6. `.no_vibe/decision-*.md` — architectural ADRs: the why behind decisions and rejected alternatives
+
+Files 4–6 form the **knowledge base** — written during `:NovibeConsult` sessions when you say "snapshot". They support stale detection: sections with a `<!-- last-verified: HASH -->` comment are prefixed with `⚠ STALE: N commit(s)` if the area has changed since that commit.
 
 Example layout:
 
 ```
 NO_VIBE.md                ← optional single-file shortcut
 .no_vibe/
-  convention-project.md   ← e.g. project-wide rules
-  convention-frontend.md  ← e.g. split by topic
-  convention-me.md        ← e.g. personal preferences (gitignore this)
+  convention-project.md   ← project-wide rules
+  convention-frontend.md  ← split by topic
+  convention-me.md        ← personal preferences (gitignore this)
   learned-style.md        ← auto-distilled (don't edit)
   learned-react.md        ← auto-distilled (don't edit)
+  map-auth.md             ← knowledge base: call graph for auth area
+  rule-db.md              ← knowledge base: always use Class X as db proxy
+  decision-api.md         ← knowledge base: why REST over GraphQL
   diffs.json              ← transient working state (gitignore this)
 ```
 
@@ -366,27 +374,32 @@ The component returns `" $0.0039 · ctx 6%"` after a fill, or empty string when 
 ## How it works
 
 ```
-Write skeleton → visual select → <leader>aa
+Write skeleton → visual select → <leader>aa  (or #gen for new files)
                                       ↓
                               floating input prompt
                                       ↓ :w
-                    system_prompt + matched convention/learned sections
+                    system_prompt + matched convention/learned/knowledge sections
+                  + treesitter enclosing function/class signature
                   + 10 lines context above/below selection
-                  + selection + your instruction
+                  + LSP diagnostics for the selection range
+                  + your instruction
                                       ↓
-              provider.build_cmd() → claude or opencode
+          provider.build_cmd() → claude / opencode / gemini  (streaming)
                                       ↓
-                          JSON response parsed
+              fill-preview split opens immediately (right vsplit, no focus steal)
+              partial code streams into the split as chunks arrive
                                       ↓
-                    response.code → spliced into buffer
-                                      ↓
-              validate change.file paths against disk
-              missing? → auto-revise once (silent retry)
-                                      ↓
-                    out-of-scope changes? → side panel (right vsplit)
-                    ok/yes → applied to target files
+                        stream complete → question queue built
+               ┌─────────────────────────────────────────────┐
+               │  [1/N] in-scope code                        │
+               │        <CR> splices into your buffer        │
+               │  [2/N] out-of-scope: path/to/file [action]  │
+               │        <CR> applies via content matching    │
+               │  ...                                        │
+               │  <CR> apply · s skip · :w revise · q quit  │
+               └─────────────────────────────────────────────┘
 ```
 
-The model responds in a structured JSON schema (`{code, message, changes, done}`). The plugin splices `response.code` into your buffer immediately. Any changes outside your selection (imports, type definitions, other files) are shown as a diff in a side panel on the right — you can read the in-scope fill alongside the proposed out-of-scope diffs, and confirm before anything is written.
+The model responds in a structured JSON schema (`{code, message, changes, done}`). `response.code` is the in-scope fill (your selection replaced). `response.changes` is a list of out-of-scope edits — each shown as a find/replace diff with the file path and action in the header. Everything goes through the review queue; nothing is written until you press `<CR>`.
 
-**Path validation**: Before opening the side panel, novibe checks every `change.file` exists on disk. If the model invented a path (more common with cheaper / less reliable models, regardless of provider), the plugin silently sends a corrective follow-up listing the missing paths and asking for a revision. Up to one retry. If validation still fails, the side panel opens anyway so you can react manually. Combined with `file_context = true` in your profile, hallucinated paths become rare.
+**Hallucinated paths** are flagged inline in the queue with a `⚠` warning so you can revise the path with `:w` or skip with `s` before wasting a confirm. Combined with `file_context = true` in your profile, hallucinated paths become rare.
