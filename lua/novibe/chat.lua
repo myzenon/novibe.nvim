@@ -538,20 +538,14 @@ function M.open_fill(pending, opts)
         end
         local find_lines = ch.find and ch.find ~= "" and vim.split(vim.trim(ch.find), "\n", { plain = true }) or {}
         local before_start = match_start and (match_start - #ctx_before) or nil
-        for i, l in ipairs(ctx_before) do push(lnum(before_start and before_start + i - 1) .. "    " .. l, "Comment") end
-        for i, l in ipairs(find_lines) do push(lnum(match_start and match_start + i - 1) .. "  - " .. l, "DiffDelete") end
+        for _, l in ipairs(ctx_before)  do push(l, "Comment")    end
+        for _, l in ipairs(find_lines)  do push(l, "DiffDelete") end
         if ch.replace and ch.replace ~= "" then
           for _, l in ipairs(vim.split(vim.trim(ch.replace), "\n", { plain = true })) do
-            -- create: no prefix so treesitter can parse the lines correctly
-            if ch.action == "create" then
-              push(l, "DiffAdd")
-            else
-              push(lnum(nil) .. "  + " .. l, "DiffAdd")
-            end
+            push(l, "DiffAdd")
           end
         end
-        local after_start = match_start and (match_start + #find_lines) or nil
-        for i, l in ipairs(ctx_after) do push(lnum(after_start and after_start + i - 1) .. "    " .. l, "Comment") end
+        for _, l in ipairs(ctx_after)   do push(l, "Comment")    end
       end
       push("└" .. string.rep("─", inner_w() - 2), "Comment")
       set_winbar(string.format(
@@ -567,10 +561,10 @@ function M.open_fill(pending, opts)
     for _, h in ipairs(hls) do
       vim.api.nvim_buf_add_highlight(buf, ns, h[2], h[1], 0, -1)
     end
-    -- Syntax highlighting for create-action previews: strip prefix above lets
-    -- treesitter parse the code lines correctly. Stop any previous parser first.
+    -- Treesitter highlighting for change previews: strip prefixes above so the
+    -- parser sees clean code. DiffAdd/DiffDelete backgrounds still show via ns.
     pcall(vim.treesitter.stop, buf)
-    if q.type == "change" and (q.change.action == "create" or q.change.action == "delete") and q.change.file then
+    if q.type == "change" and q.change.file and q.change.file ~= "" then
       local ft = vim.filetype.match({ filename = q.change.file })
       if ft then
         local ts_lang = (vim.treesitter.language.get_lang and vim.treesitter.language.get_lang(ft)) or ft
