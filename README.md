@@ -118,6 +118,7 @@ AI proposes each new file as a separate queue entry — same `<CR>`/`s`/`:w` rev
 | `:NovibeKB`          | Browse all `.no_vibe` files by category (convention, learn, map, rule, decision) |
 | `:NovibeDistill`     | Force `#teach` distillation now                              |
 | `:NovibePromote`     | Review mature learned rules and graduate them to conventions |
+| `:NovibeActReviewFocus` | Focus the active fill-preview chat window (useful when in insert mode) |
 
 ---
 
