@@ -4,13 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Documentation checklist
 
-When the user says "update the docs" or asks to check/update documentation, always review **all three** doc files — not just CLAUDE.md:
+When the user says "update the docs" or asks to check/update documentation, always review **all doc files** — not just CLAUDE.md:
 
 - `CLAUDE.md` — developer/contributor reference (file structure, core flow, CLI flags, schema)
 - `README.md` — user-facing: usage flow, commands table, key bindings, teach/gen examples
-- `CONFIG.md` — user-facing: profiles, provider differences, conventions format, how it works diagram
+- `docs/config.md` — user-facing: profiles, provider differences, conventions format, how it works diagram
+- `docs/teach.md` — user-facing: full teach → distill → promote lifecycle guide
 
-CLAUDE.md tends to stay current because it is in the dev loop. README.md and CONFIG.md drift — check them explicitly for stale flow descriptions, missing commands, and outdated key bindings whenever user-facing behavior changes.
+CLAUDE.md tends to stay current because it is in the dev loop. README.md and the docs/ files drift — check them explicitly for stale flow descriptions, missing commands, and outdated key bindings whenever user-facing behavior changes.
 
 ## What This Plugin Does
 

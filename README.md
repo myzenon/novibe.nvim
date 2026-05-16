@@ -41,14 +41,14 @@ You design the structure. You write the skeleton — function signature, comment
         { label = "OC DeepSeek",  provider = "opencode", model = "opencode-go/deepseek-v4-pro", effort = "high", file_context = false },
         { label = "OC Qwen",      provider = "opencode", model = "opencode-go/qwen3.6-plus",    effort = "high", file_context = true },
         { label = "Gemini Flash", provider = "gemini",   model = "gemini-2.0-flash" },
-        -- Run `opencode models` (or check `/model` in `gemini`) to see everything available. See CONFIG.md.
+        -- Run `opencode models` (or check `/model` in `gemini`) to see everything available. See docs/config.md.
       },
     })
   end,
 }
 ```
 
-See **[CONFIG.md](./CONFIG.md)** for full configuration, profiles, conventions, provider differences, and the system prompt.
+See **[docs/config.md](./docs/config.md)** for full configuration, profiles, conventions, provider differences, and the system prompt.
 
 ---
 
@@ -56,13 +56,13 @@ See **[CONFIG.md](./CONFIG.md)** for full configuration, profiles, conventions, 
 
 Bootstrap your project conventions by running your AI CLI in the project root:
 
-- **Claude Code** — start `claude`, then paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/claude-init.md and follow the instructions."`
-- **opencode** — start `opencode`, then paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/opencode-init.md and follow the instructions."`
-- **Gemini CLI** — start `gemini`, trust the workspace when prompted, then paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/gemini-init.md and follow the instructions."`
+- **Claude Code** — start `claude`, then paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/docs/claude-init.md and follow the instructions."`
+- **opencode** — start `opencode`, then paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/docs/opencode-init.md and follow the instructions."`
+- **Gemini CLI** — start `gemini`, trust the workspace when prompted, then paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/docs/gemini-init.md and follow the instructions."`
 
 The agent analyzes your project, generates `.no_vibe/convention-project.md`, and writes the novibe format spec into `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` so it auto-loads in future sessions.
 
-See [CONFIG.md → Fresh project setup](./CONFIG.md#fresh-project-setup) for details.
+See [docs/config.md → Fresh project setup](./docs/config.md#fresh-project-setup) for details.
 
 ---
 
@@ -123,17 +123,9 @@ AI proposes each new file as a separate queue entry — same `<CR>`/`s`/`:w` rev
 
 ## Teach your style
 
-After a fill, edit the result to match your taste, re-select, run `:NovibeAct` with `#teach <reason>`:
+After a fill, edit the result to match your preference, re-select, and run `:NovibeAct` with `#teach <reason>`. novibe captures the diff, distills it into a rule, and eventually promotes it to a convention — all from real examples, not hand-written rules.
 
-```
-#teach prefer for loop over map
-#teach always use early return instead of nested if
-#teach named function over arrow function for exports
-```
-
-novibe accumulates the diffs and auto-distills topic-organized rules into `.no_vibe/learned-*.md` (e.g. `learned-style.md`, `learned-react.md`). Each rule carries a support count — the more diffs that reinforce it, the higher the count. The model learns your style from real examples, not hand-written rules.
-
-Run `:NovibePromote` to review mature learned rules and graduate them into canonical `convention-*.md` files. See [CONFIG.md → Promotion](./CONFIG.md#promotion).
+See **[docs/teach.md](./docs/teach.md)** for the full teach → distill → promote guide, both teach modes, the lifecycle diagram, and tips.
 
 ---
 
@@ -144,10 +136,10 @@ After each fill, cost and context window % show automatically in:
 - The input dialog title (previous fill's stats)
 - The chat side panel winbar (live, after each follow-up)
 
-Optional lualine integration for persistent display — see [CONFIG.md → Statusline integration](./CONFIG.md#statusline-integration).
+Optional lualine integration for persistent display — see [docs/config.md → Statusline integration](./docs/config.md#statusline-integration).
 
 **Context %** is the most useful signal: as the `--continue` session fills up (30–40%+), quality can degrade — run `:NovibeReset` to start fresh.
 
 ---
 
-For profiles, conventions, provider differences, and full configuration → **[CONFIG.md](./CONFIG.md)**.
+For profiles, conventions, provider differences, and full configuration → **[docs/config.md](./docs/config.md)**.
