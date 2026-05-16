@@ -77,11 +77,26 @@ function M.apply(change)
   if type(change.file) ~= "string" or change.file == "" then
     return false, "change is missing 'file'"
   end
-  if type(change.find) ~= "string" then
-    return false, "change for " .. change.file .. " is missing 'find'"
-  end
   if type(change.replace) ~= "string" then
     return false, "change for " .. change.file .. " is missing 'replace'"
+  end
+
+  local action = (type(change.action) == "string" and change.action ~= "")
+    and change.action or "replace"
+
+  -- create: write a brand-new file; no find/replace matching needed
+  if action == "create" then
+    local abs = vim.fn.fnamemodify(change.file, ":p")
+    if vim.fn.filereadable(abs) == 1 then
+      return false, "file already exists: " .. change.file .. " — use action 'replace' or revise the path with :w"
+    end
+    vim.fn.mkdir(vim.fn.fnamemodify(abs, ":h"), "p")
+    vim.fn.writefile(vim.split(change.replace, "\n", { plain = true }), abs)
+    return true, nil
+  end
+
+  if type(change.find) ~= "string" then
+    return false, "change for " .. change.file .. " is missing 'find'"
   end
 
   local bufnr, err = get_buf(change.file)
@@ -94,8 +109,6 @@ function M.apply(change)
     return false, "could not locate block in " .. change.file .. "\nSearched for: " .. snippet
   end
 
-  local action = (type(change.action) == "string" and change.action ~= "")
-    and change.action or "replace"
   local new_lines = vim.split(change.replace, "\n", { plain = true })
 
   if action == "replace" then

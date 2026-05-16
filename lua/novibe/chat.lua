@@ -454,7 +454,7 @@ function M.open_fill(pending, opts)
   -- so confirm() can stay on the question instead of silently advancing.
   local function apply_q(q)
     if q.type == "code" then
-      if not (q.code and vim.api.nvim_buf_is_valid(pending.bufnr)) then
+      if not (q.code and pending.bufnr and vim.api.nvim_buf_is_valid(pending.bufnr)) then
         vim.notify("novibe: working buffer is gone — cannot apply code", vim.log.levels.ERROR)
         return false
       end
@@ -562,7 +562,7 @@ function M.open_fill(pending, opts)
       -- accepted if the current head WAS a code-Q (otherwise the in-scope
       -- edit is already applied and the AI was instructed not to return one).
       local new_q = {}
-      if cur_q and cur_q.type == "code"
+      if pending.bufnr and cur_q and cur_q.type == "code"
          and response.code and response.code ~= vim.NIL and response.code ~= "" then
         table.insert(new_q, { type = "code", code = vim.trim(response.code) })
       end
@@ -622,7 +622,7 @@ function M.open_fill(pending, opts)
     end
 
     questions = {}
-    if response.code and response.code ~= vim.NIL and response.code ~= "" then
+    if pending.bufnr and response.code and response.code ~= vim.NIL and response.code ~= "" then
       table.insert(questions, { type = "code", code = vim.trim(response.code) })
     end
     for _, ch in ipairs(normalize_changes(response.changes)) do

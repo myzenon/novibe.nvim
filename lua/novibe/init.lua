@@ -17,6 +17,18 @@ M._opencode_session_id  = nil    -- captured from opencode response, reused for 
 
 local SESSION_WARN_AFTER = 10
 
+local GEN_SYSTEM = [[Generate new files as requested. Respond ONLY in JSON — no "code" field.
+{
+  "message": "brief summary of what you are creating and why",
+  "changes": [
+    { "file": "path/relative/to/project/root", "description": "...", "action": "create", "find": "", "replace": "full file content" }
+  ],
+  "done": false
+}
+Use action "create" for new files. "find" must be empty string for create.
+Set done:false so the user reviews each file before it is written.
+If a file already exists and needs editing, use action "replace" with a proper "find" field instead.]]
+
 local ns = vim.api.nvim_create_namespace("novibe")
 local spinner_frames = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
 local loading_messages = {
@@ -230,6 +242,85 @@ function M.fill(line1, line2)
         config.options.learn and config.options.learn.auto_extract_after,
         config.options.active_profile
       )
+      return
+    end
+
+    -- #gen mode: project-level file generation; AI proposes new files via changes[create]
+    if vim.startswith(user_prompt, "#gen") then
+      local description = vim.trim(user_prompt:sub(5))
+      if description == "" then
+        vim.notify("novibe: #gen requires a description, e.g. #gen create a React UserProfile component", vim.log.levels.WARN)
+        return
+      end
+
+      local root        = project_root(vim.api.nvim_buf_get_name(bufnr))
+      local no_vibe_txt = no_vibe.load("")  -- always-sections only (no target file yet)
+      local parts = {
+        GEN_SYSTEM,
+        no_vibe_txt and ("\nProject conventions:\n" .. no_vibe_txt) or "",
+        "",
+        "Project root: " .. root,
+        "",
+        "Request: " .. description,
+      }
+      local prompt = table.concat(parts, "\n")
+
+      local fill_chat = chat.open_fill(
+        { bufnr = nil, start_line = 1, end_line = 1 },
+        { bin = bin, provider = provider, session_id = M._opencode_session_id,
+          on_session_update = function(sid) M._opencode_session_id = sid end }
+      )
+
+      local profile = config.options.active_profile
+      local carry   = not M._skip_continue
+      M._skip_continue = false
+
+      local cmd = provider.build_cmd(bin, prompt, {
+        profile      = profile,
+        bare         = config.options.bare,
+        use_continue = carry,
+        session_id   = carry and M._opencode_session_id or nil,
+        stream       = provider.streaming,
+      })
+
+      local sctx = { raw = "", text = "" }
+      local sys_opts = { text = true }
+      if provider.streaming then
+        sys_opts.stdout = function(_, data)
+          if not data then return end
+          sctx.raw = sctx.raw .. data
+          -- no push: gen mode returns changes[], not a code field
+        end
+      end
+
+      vim.system(cmd, sys_opts, vim.schedule_wrap(function(result)
+        local stdout = provider.streaming and sctx.raw or (result.stdout or "")
+        if result.code ~= 0 or stdout == "" then
+          vim.notify(
+            string.format("novibe: exit %d — %s", result.code, vim.trim(result.stderr or "")),
+            vim.log.levels.ERROR
+          )
+          fill_chat.cancel()
+          return
+        end
+
+        local response, usage = provider.parse_output(stdout)
+
+        M._session_count = M._session_count + 1
+        if usage then
+          M._session_cost = M._session_cost + (usage.cost_usd or 0)
+          M._last_usage   = usage
+          pcall(function() require("lualine").refresh() end)
+        end
+        if M._session_count == SESSION_WARN_AFTER then
+          vim.notify(
+            string.format("novibe: %d fills in this session — context is getting long. Run :NovibeReset to start fresh.", SESSION_WARN_AFTER),
+            vim.log.levels.WARN
+          )
+        end
+
+        fill_chat.finalize(response, usage)
+      end))
       return
     end
 

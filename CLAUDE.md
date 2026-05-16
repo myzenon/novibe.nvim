@@ -69,7 +69,10 @@ Visual select skeleton (or cursor on line)
 
 ## Commands
 
-- `:NovibeAct` — act on current line or explicit range (e.g. `:'<,'>NovibeAct`); input float accepts free-form instruction, or `#teach <reason>` to accumulate evidence (diff if editing a recent fill, otherwise a direct rule note)
+- `:NovibeAct` — act on current line or explicit range (e.g. `:'<,'>NovibeAct`); input float accepts:
+  - free-form instruction → fill/modify the selection in place
+  - `#teach <reason>` → accumulate evidence for distillation (diff if editing a recent fill, otherwise a direct rule note)
+  - `#gen <description>` → project-level generation: AI proposes new files via `changes[action=create]`, shown in the question queue for file-by-file review; no selection needed
 - `:NovibeConsult` — open singleton interactive session in a vertical split; process is killed when buffer closes; `<Esc><Esc>` exits terminal mode; range `:'<,'>NovibeConsult` injects the selection. Seed includes: file, line, current git commit hash, matched `.no_vibe` sections (conventions, learned, and knowledge base), and snapshot instructions. Injected via `--append-system-prompt` for **claude**, `--prompt-interactive` for **gemini**. The AI may freely edit `CLAUDE.md` and all `.no_vibe/*.md` files; all other file modifications are off-limits. Say **"snapshot"** mid-session to have the AI write discoveries to the knowledge base. **opencode workaround:** no CLI flag exists, so use `:NovibeConsultPrompt` after the session is open — the seed is `chansend`-ed straight into opencode's input box; press Enter to submit.
 - `:NovibeConsultPrompt` — build the consult seed from the current buffer/selection and chansend it into the active consult terminal. Required for opencode (which cannot receive context via CLI); also works with claude/gemini if you want to push fresh context mid-session. Must be invoked from the source buffer, not the consult terminal.
 - `:NovibeProfile` — two-step picker: choose slot (Act / Consult), then profile. Each slot persists independently. No profile = CLI defaults.
@@ -183,6 +186,7 @@ Never uses line numbers. Two-pass approach:
 - `replace` — find block, replace with new code
 - `insert_after` — find anchor, insert new code after it
 - `insert_before` — find anchor, insert new code before it
+- `create` — write a brand-new file; `find` must be `""`. Errors if the file already exists.
 
 ## Convention, Learned Rule & Knowledge Base Files
 
