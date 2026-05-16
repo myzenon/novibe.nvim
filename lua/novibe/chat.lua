@@ -812,11 +812,11 @@ function M.open_fill(pending, opts)
   return { push = push, finalize = finalize, cancel = close }
 end
 
--- Track the active fill window so :NovibeFocus can jump to it.
+-- Track the active fill window so :NovibeActReviewFocus can jump to it.
 local _fill_win = nil
 
 -- Focus the active fill-preview chat window.
--- Called by :NovibeFocus so the user can jump from the working buffer to the
+-- Called by :NovibeActReviewFocus so the user can jump from the working buffer to the
 -- chat without reaching for the mouse or using window-navigation keys.
 function M.focus_fill()
   if not (_fill_win and vim.api.nvim_win_is_valid(_fill_win)) then

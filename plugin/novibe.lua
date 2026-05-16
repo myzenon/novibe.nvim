@@ -84,7 +84,7 @@ vim.api.nvim_create_user_command("NovibeProfile", function()
   end)
 end, { desc = "novibe: pick profile for Act or Consult" })
 
-vim.api.nvim_create_user_command("NovibeFocus", function()
+vim.api.nvim_create_user_command("NovibeActReviewFocus", function()
   require("novibe.chat").focus_fill()
 end, { desc = "novibe: focus the active fill-preview chat window" })
 

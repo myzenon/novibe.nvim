@@ -29,7 +29,7 @@ You design the structure. You write the skeleton — function signature, comment
 {
   "myzenon/novibe.nvim",
   dependencies = { "folke/snacks.nvim" },
-  cmd = { "NovibeAct", "NovibeConsult", "NovibeConsultPrompt", "NovibeProfile", "NovibeDistill", "NovibePromote", "NovibeReset", "NovibeStatus", "NovibeKB", "NovibeFocus" },
+  cmd = { "NovibeAct", "NovibeConsult", "NovibeConsultPrompt", "NovibeProfile", "NovibeDistill", "NovibePromote", "NovibeReset", "NovibeStatus", "NovibeKB", "NovibeActReviewFocus" },
   keys = {
     { "<leader>aa", ":NovibeAct<CR>", mode = "v", desc = "novibe: fill implementation" },
     { "<leader>aa", ":NovibeAct<CR>", mode = "n", desc = "novibe: act on current line" },
