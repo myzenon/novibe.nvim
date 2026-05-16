@@ -267,10 +267,14 @@ function M.fill(line1, line2)
       local buf_name    = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(bufnr), ":.")
       local prompt      = M._build_gen_prompt(description, root, no_vibe_txt, buf_name, selection)
 
+      local gen_job = nil
       local fill_chat = chat.open_fill(
         { bufnr = nil, start_line = 1, end_line = 1 },
         { bin = bin, provider = provider, session_id = M._opencode_session_id,
-          on_session_update = function(sid) M._opencode_session_id = sid end }
+          on_session_update = function(sid) M._opencode_session_id = sid end,
+          on_cancel = function()
+            if gen_job then pcall(function() gen_job:kill(9) end); gen_job = nil end
+          end }
       )
 
       local profile = config.options.active_profile
@@ -295,7 +299,8 @@ function M.fill(line1, line2)
         end
       end
 
-      vim.system(cmd, sys_opts, vim.schedule_wrap(function(result)
+      gen_job = vim.system(cmd, sys_opts, vim.schedule_wrap(function(result)
+        gen_job = nil
         local stdout = provider.streaming and sctx.raw or (result.stdout or "")
         if result.code ~= 0 or stdout == "" then
           vim.notify(
