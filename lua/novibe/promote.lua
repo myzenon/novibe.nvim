@@ -98,7 +98,8 @@ function M.promote(provider, bin, profile)
       return
     end
 
-    local has_changes = response.changes and #response.changes > 0
+    local changes = type(response.changes) == "table" and response.changes or {}
+    local has_changes = #changes > 0
     local has_message = response.message and response.message ~= vim.NIL
 
     if not (has_changes or has_message) then

@@ -23,10 +23,11 @@ lua/novibe/
   glob.lua     — glob → Lua pattern conversion + section header matching
   no_vibe.lua  — loads NO_VIBE.md + .no_vibe/convention-*.md + .no_vibe/learned-*.md + knowledge base (map/rule/decision), filters by filename; stale detection via git log
   learn.lua    — #teach diff capture (.no_vibe/diffs.json) + distillation into learned-*.md topic files
+  promote.lua  — :NovibePromote flow: reads learned-*.md + convention-*.md, asks AI to graduate mature rules (n≥3) into convention files; opens M.open for review
   consult.lua  — singleton interactive consult: opens in current window, seeds file/line/selection/conventions; supports claude, opencode, gemini TUI
   providers/   — claude.lua, opencode.lua, gemini.lua — each exposes find_bin, build_cmd, parse_output, parse_chunk, streaming
 plugin/
-  novibe.lua   — guard + :NovibeAct, :NovibeConsult, :NovibeConsultPrompt, :NovibeProfile, :NovibeDistill user commands
+  novibe.lua   — guard + :NovibeAct, :NovibeConsult, :NovibeConsultPrompt, :NovibeProfile, :NovibeDistill, :NovibePromote user commands
 ```
 
 ## Core Flow
@@ -64,7 +65,7 @@ Visual select skeleton (or cursor on line)
 
 ### Multi-turn follow-up chat (M.open)
 
-`M.open()` (the legacy float) is still available for cases where only out-of-scope changes are proposed without a fillable code field. It uses the same `<CR> apply` / `:w discuss` / `q quit` semantics plus `done:true` stays open until the user manually closes with `q`.
+`M.open()` (the legacy split) is still available for cases where only out-of-scope changes are proposed without a fillable code field. It uses the same `<CR> apply` / `:w discuss` / `q quit` semantics plus `done:true` stays open until the user manually closes with `q`.
 
 ## Commands
 
@@ -73,6 +74,7 @@ Visual select skeleton (or cursor on line)
 - `:NovibeConsultPrompt` — build the consult seed from the current buffer/selection and chansend it into the active consult terminal. Required for opencode (which cannot receive context via CLI); also works with claude/gemini if you want to push fresh context mid-session. Must be invoked from the source buffer, not the consult terminal.
 - `:NovibeProfile` — two-step picker: choose slot (Act / Consult), then profile. Each slot persists independently. No profile = CLI defaults.
 - `:NovibeDistill` — distill accumulated diffs from `#teach` into topic-organized `.no_vibe/learned-*.md` files (Claude decides the topic split)
+- `:NovibePromote` — review learned rules and graduate mature ones (support count n≥3) into canonical `.no_vibe/convention-*.md` files; opens the review split so changes can be inspected, revised, or skipped before applying
 
 ## CLI Invocation
 
