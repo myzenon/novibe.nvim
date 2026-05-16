@@ -342,7 +342,7 @@ Write skeleton → visual select → <leader>aa  (or #gen for new files)
                │  [2/N] out-of-scope: path/to/file [action]  │
                │        <CR> applies via content matching    │
                │  ...                                        │
-               │  <CR> apply · s skip · :w revise · q quit  │
+               │  <CR> apply · s skip · :w feedback · q quit │
                └─────────────────────────────────────────────┘
 ```
 

@@ -86,20 +86,26 @@ You can also run `:NovibeAct` with the cursor on a single line — no visual sel
 |---|---|
 | `<CR>` | Apply this change and advance |
 | `s` | Skip (don't apply), advance |
-| `:w <text>` | Ask the AI to revise; response replaces the queue |
+| `:w <text>` | Send feedback to the AI; response replaces the queue |
 | `:w all` | Apply every remaining change and close |
 | `q` | Quit; already-applied changes stay |
 
-In-scope code (your selection) appears first. Out-of-scope changes (imports, types, other files) follow, shown as find/replace diffs with the file path in the header. Hallucinated paths are flagged inline.
+In-scope code (your selection) appears first, shown as a `-`/`+` diff against your original with 3 lines of surrounding context and line numbers — so you can see exactly where the new code lands. Out-of-scope changes (imports, types, other files) follow with the same diff view, pulling context from the actual file on disk.
+
+Hallucinated paths are flagged inline with `⚠` so you can revise or skip before wasting a confirm.
+
+A virtual line appears below your selection in the working buffer once the review is ready — it clears automatically when the chat closes. Use `i`/`a` in the chat window to jump straight to the reply area regardless of where your cursor is. If you're in insert mode when the chat opens, `:NovibeActReviewFocus` jumps to it without leaving the keyboard.
 
 ### Generate new files
 
-Run `:NovibeAct` from anywhere (no selection needed), type `#gen <description>`:
+Run `:NovibeAct` from anywhere, type `#gen <description>`:
 
 ```
 #gen create a React UserProfile component with name/avatar props using shadcn Card
 #gen create a db repository for the User model
 ```
+
+If you have a file open or a block selected, novibe injects it as reference context — so `#gen create the repository for this service` while viewing `auth.service.ts` gives the AI the full picture of what to mirror.
 
 AI proposes each new file as a separate queue entry — same `<CR>`/`s`/`:w` review flow, file by file.
 
