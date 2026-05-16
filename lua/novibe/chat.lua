@@ -12,6 +12,9 @@ local CONFIRM = {
   ["lgtm"]=1, ["ship it"]=1,
 }
 
+-- Track the active fill window so :NovibeActReviewFocus can jump to it.
+local _fill_win = nil
+
 local function is_confirm(text)
   return CONFIRM[vim.trim(text):lower()] ~= nil
 end
@@ -515,7 +518,7 @@ function M.open_fill(pending, opts)
         push("│")
         if file_exists then
           local file_lines = vim.fn.readfile(abs)
-          for i, l in ipairs(file_lines) do push(lnum(i) .. "  - " .. l, "DiffDelete") end
+          for _, l in ipairs(file_lines) do push(l, "DiffDelete") end
         end
       else
         -- Surface hallucinated file paths up-front so the user doesn't waste a
@@ -539,7 +542,12 @@ function M.open_fill(pending, opts)
         for i, l in ipairs(find_lines) do push(lnum(match_start and match_start + i - 1) .. "  - " .. l, "DiffDelete") end
         if ch.replace and ch.replace ~= "" then
           for _, l in ipairs(vim.split(vim.trim(ch.replace), "\n", { plain = true })) do
-            push(lnum(nil) .. "  + " .. l, "DiffAdd")
+            -- create: no prefix so treesitter can parse the lines correctly
+            if ch.action == "create" then
+              push(l, "DiffAdd")
+            else
+              push(lnum(nil) .. "  + " .. l, "DiffAdd")
+            end
           end
         end
         local after_start = match_start and (match_start + #find_lines) or nil
@@ -558,6 +566,16 @@ function M.open_fill(pending, opts)
     vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
     for _, h in ipairs(hls) do
       vim.api.nvim_buf_add_highlight(buf, ns, h[2], h[1], 0, -1)
+    end
+    -- Syntax highlighting for create-action previews: strip prefix above lets
+    -- treesitter parse the code lines correctly. Stop any previous parser first.
+    pcall(vim.treesitter.stop, buf)
+    if q.type == "change" and (q.change.action == "create" or q.change.action == "delete") and q.change.file then
+      local ft = vim.filetype.match({ filename = q.change.file })
+      if ft then
+        local ts_lang = (vim.treesitter.language.get_lang and vim.treesitter.language.get_lang(ft)) or ft
+        pcall(vim.treesitter.start, buf, ts_lang)
+      end
     end
     if vim.api.nvim_win_is_valid(win) then
       vim.api.nvim_win_set_cursor(win, { #content, 0 })
@@ -831,9 +849,6 @@ function M.open_fill(pending, opts)
 
   return { push = push, finalize = finalize, cancel = close }
 end
-
--- Track the active fill window so :NovibeActReviewFocus can jump to it.
-local _fill_win = nil
 
 -- Focus the active fill-preview chat window.
 -- Called by :NovibeActReviewFocus so the user can jump from the working buffer to the
