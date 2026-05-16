@@ -263,15 +263,8 @@ function M.fill(line1, line2)
 
       local root        = project_root(vim.api.nvim_buf_get_name(bufnr))
       local no_vibe_txt = no_vibe.load("")  -- always-sections only (no target file yet)
-      local parts = {
-        GEN_SYSTEM,
-        no_vibe_txt and ("\nProject conventions:\n" .. no_vibe_txt) or "",
-        "",
-        "Project root: " .. root,
-        "",
-        "Request: " .. description,
-      }
-      local prompt = table.concat(parts, "\n")
+      local buf_name    = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(bufnr), ":.")
+      local prompt      = M._build_gen_prompt(description, root, no_vibe_txt, buf_name, selection)
 
       local fill_chat = chat.open_fill(
         { bufnr = nil, start_line = 1, end_line = 1 },
@@ -463,6 +456,29 @@ function M.fill(line1, line2)
       end)
     )
   end, { stats = input_stats, profile = config.options.active_profile })
+end
+
+-- Build the #gen prompt from its constituent parts. Exposed for testing.
+-- buf_name: relative path of the reference file ("" if scratch/unknown).
+-- selection: the current buffer selection to inject as reference code ("" if none).
+function M._build_gen_prompt(description, root, no_vibe_txt, buf_name, selection)
+  local parts = {
+    GEN_SYSTEM,
+    no_vibe_txt and ("\nProject conventions:\n" .. no_vibe_txt) or "",
+    "",
+    "Project root: " .. root,
+  }
+  if buf_name and buf_name ~= "" then
+    table.insert(parts, "")
+    table.insert(parts, "Reference file: " .. buf_name)
+    if selection and vim.trim(selection) ~= "" then
+      table.insert(parts, "Reference code:")
+      table.insert(parts, selection)
+    end
+  end
+  table.insert(parts, "")
+  table.insert(parts, "Request: " .. description)
+  return table.concat(parts, "\n")
 end
 
 return M
