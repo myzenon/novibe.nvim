@@ -151,46 +151,57 @@ vim.api.nvim_create_user_command("NovibeStatus", function()
   vim.notify("novibe\n" .. table.concat(lines, "\n"), vim.log.levels.INFO)
 end, { desc = "novibe: show active profile, session state, and loaded rule files" })
 
-vim.api.nvim_create_user_command("NovibeConventions", function()
+vim.api.nvim_create_user_command("NovibeKB", function()
   local no_vibe = require("novibe.no_vibe")
   local found   = no_vibe.discover()
 
-  if not found or (not found.novibe_md and #found.conventions == 0) then
+  if not found then
     vim.notify(
-      "novibe: no convention files found (walked up from " .. vim.fn.fnamemodify(vim.fn.getcwd(), ":~") .. ")",
+      "novibe: no .no_vibe files found (walked up from " .. vim.fn.fnamemodify(vim.fn.getcwd(), ":~") .. ")",
       vim.log.levels.WARN
     )
     return
   end
 
-  local files = {}
-  if found.novibe_md then table.insert(files, found.novibe_md) end
-  for _, f in ipairs(found.conventions) do table.insert(files, f) end
+  local categories = {}
+  local function add(label, files)
+    if files and #files > 0 then
+      table.insert(categories, { label = label, files = files })
+    end
+  end
 
-  vim.ui.select(files, {
-    prompt = "novibe: open convention file",
-    format_item = function(f) return vim.fn.fnamemodify(f, ":~:.") end,
-  }, function(choice)
-    if choice then vim.cmd("edit " .. vim.fn.fnameescape(choice)) end
-  end)
-end, { desc = "novibe: browse and open canonical convention files" })
+  if found.novibe_md then
+    table.insert(categories, { label = "NO_VIBE.md", files = { found.novibe_md } })
+  end
+  add("Convention", found.conventions)
+  add("Learn",      found.learned)
+  add("Map",        found.maps)
+  add("Rule",       found.rules)
+  add("Decision",   found.decisions)
 
-vim.api.nvim_create_user_command("NovibeLearns", function()
-  local no_vibe = require("novibe.no_vibe")
-  local found   = no_vibe.discover()
-
-  if not found or #found.learned == 0 then
-    vim.notify(
-      "novibe: no learned-*.md files yet — run :NovibeAct with #teach to start staging rules",
-      vim.log.levels.WARN
-    )
+  if #categories == 0 then
+    vim.notify("novibe: no .no_vibe files found", vim.log.levels.WARN)
     return
   end
 
-  vim.ui.select(found.learned, {
-    prompt = "novibe: open learned (staged) file",
-    format_item = function(f) return vim.fn.fnamemodify(f, ":~:.") end,
-  }, function(choice)
-    if choice then vim.cmd("edit " .. vim.fn.fnameescape(choice)) end
+  local function open_file(f)
+    vim.cmd("edit " .. vim.fn.fnameescape(f))
+  end
+
+  local function pick_file(cat)
+    if #cat.files == 1 then open_file(cat.files[1]); return end
+    vim.ui.select(cat.files, {
+      prompt = "novibe KB › " .. cat.label,
+      format_item = function(f) return vim.fn.fnamemodify(f, ":t") end,
+    }, function(choice)
+      if choice then open_file(choice) end
+    end)
+  end
+
+  vim.ui.select(categories, {
+    prompt = "novibe KB",
+    format_item = function(c) return c.label .. "  (" .. #c.files .. ")" end,
+  }, function(cat)
+    if cat then pick_file(cat) end
   end)
-end, { desc = "novibe: browse and open staged learned-*.md files" })
+end, { desc = "novibe: browse all .no_vibe knowledge base files by category" })

@@ -29,7 +29,7 @@ You design the structure. You write the skeleton — function signature, comment
 {
   "myzenon/novibe.nvim",
   dependencies = { "folke/snacks.nvim" },
-  cmd = { "NovibeAct", "NovibeConsult", "NovibeConsultPrompt", "NovibeProfile", "NovibeDistill", "NovibePromote", "NovibeReset", "NovibeStatus", "NovibeConventions", "NovibeLearns" },
+  cmd = { "NovibeAct", "NovibeConsult", "NovibeConsultPrompt", "NovibeProfile", "NovibeDistill", "NovibePromote", "NovibeReset", "NovibeStatus", "NovibeKB" },
   keys = {
     { "<leader>aa", ":NovibeAct<CR>", mode = "v", desc = "novibe: fill implementation" },
     { "<leader>aa", ":NovibeAct<CR>", mode = "n", desc = "novibe: act on current line" },
@@ -115,8 +115,7 @@ AI proposes each new file as a separate queue entry — same `<CR>`/`s`/`:w` rev
 | `:NovibeProfile`     | Two-step picker: choose slot (Act / Consult), then profile   |
 | `:NovibeReset`       | Start a fresh session on the next fill                       |
 | `:NovibeStatus`      | Show profile, session, cost, ctx %, loaded rule files        |
-| `:NovibeConventions` | Browse canonical `convention-*.md` files                     |
-| `:NovibeLearns`      | Browse staged `learned-*.md` files                           |
+| `:NovibeKB`          | Browse all `.no_vibe` files by category (convention, learn, map, rule, decision) |
 | `:NovibeDistill`     | Force `#teach` distillation now                              |
 | `:NovibePromote`     | Review mature learned rules and graduate them to conventions |
 

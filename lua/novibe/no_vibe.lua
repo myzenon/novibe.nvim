@@ -88,6 +88,9 @@ function M.discover()
         novibe_md   = has_novibe and novibe_path or nil,
         conventions = convention_files,
         learned     = learned_files,
+        maps        = map_files,
+        rules       = rule_files,
+        decisions   = decision_files,
         knowledge   = knowledge,
       }
     end
