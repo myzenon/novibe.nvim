@@ -221,8 +221,8 @@ function M.open(line1, line2, has_range)
 end
 
 -- Build the seed from the current buffer/selection and chansend it into the
--- active consult terminal (intended for opencode, which has no CLI flag for
--- pre-seeding context). User presses Enter manually to submit.
+-- active consult terminal (intended for opencode/codex, which have no CLI flag
+-- for pre-seeding context). User presses Enter manually to submit.
 function M.send_prompt(line1, line2, has_range)
   if not state.job or not state.buf or not vim.api.nvim_buf_is_valid(state.buf) then
     vim.notify("novibe: no active consult session — run :NovibeConsult first", vim.log.levels.WARN)

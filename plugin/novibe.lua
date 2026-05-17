@@ -122,7 +122,7 @@ vim.api.nvim_create_user_command("NovibeStatus", function()
   elseif count == 0 then
     table.insert(lines, "Session:  fresh (no fills yet)")
   else
-    table.insert(lines, "Session:  " .. count .. " fill(s) with --continue")
+    table.insert(lines, "Session:  " .. count .. " fill(s) in current session")
   end
 
   local cost = novibe._session_cost or 0
