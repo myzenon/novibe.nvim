@@ -64,9 +64,9 @@ require("novibe").setup({
     { label = "Gemini Flash", provider = "gemini", model = "gemini-2.0-flash" },
     { label = "Gemini Pro",   provider = "gemini", model = "gemini-2.5-pro" },
 
-    -- OpenAI Codex (no effort/variant equivalent)
-    { label = "Codex o4-mini", provider = "codex", model = "o4-mini" },
-    { label = "Codex o3",      provider = "codex", model = "o3" },
+    -- OpenAI Codex (effort maps to model_reasoning_effort config key)
+    { label = "Codex o4-mini", provider = "codex", model = "o4-mini", effort = "high" },
+    { label = "Codex o3",      provider = "codex", model = "o3",      effort = "xhigh" },
   },
 })
 ```
@@ -101,7 +101,7 @@ Recommended for cheaper / less reliable models that tend to hallucinate file pat
 { label = "OC GPT-5", provider = "opencode", model = "openai/gpt-5", effort = "high", file_context = true }
 ```
 
-**`effort`** — Claude maps to `--effort`, opencode maps to `--variant`. Gemini and Codex have no equivalent and ignore this field.
+**`effort`** — Claude maps to `--effort`, opencode maps to `--variant`, Codex maps to `-c model_reasoning_effort=<value>`. Gemini has no equivalent and ignores this field.
 
 | Level | Notes |
 |---|---|
@@ -150,7 +150,7 @@ All four providers are first-class. novibe normalizes most of the differences (s
 - **Sessions**: novibe captures `thread_id` from the first response and reuses it via `codex exec resume <thread_id>` for follow-up fills. `:NovibeReset` clears it.
 - **Non-streaming**: unlike the other providers, codex delivers all output at once (no streaming). The fill-preview split won't animate — it appears complete when the response arrives.
 - **`bare` mode**: silently ignored — Claude-only.
-- **`effort`**: no equivalent — codex has no reasoning effort flag, so the `effort` field is ignored.
+- **`effort`**: maps to `-c model_reasoning_effort=<value>`. Values: `minimal`, `low`, `medium`, `high`, `xhigh`; `max` maps to `xhigh`. Only effective on reasoning models (o-series).
 - **System prompt**: novibe injects its JSON schema instructions via codex's `-c instructions="..."` config override, which replaces codex's built-in system prompt. This keeps codex focused on JSON output instead of its default agentic behavior.
 - **Shell commands**: codex is an agentic tool and may try to run shell commands before answering. novibe instructs it not to, which keeps responses fast. If you see `item.command_execution` events in debug output, the instruction was overridden by the model — simplify the prompt or try a different model.
 - **Cost**: not reported by the CLI.

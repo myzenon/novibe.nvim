@@ -41,7 +41,7 @@ You design the structure. You write the skeleton — function signature, comment
         { label = "OC DeepSeek",  provider = "opencode", model = "opencode-go/deepseek-v4-pro", effort = "high", file_context = false },
         { label = "OC Qwen",      provider = "opencode", model = "opencode-go/qwen3.6-plus",    effort = "high", file_context = true },
         { label = "Gemini Flash", provider = "gemini",   model = "gemini-2.0-flash" },
-        { label = "Codex o4",     provider = "codex",    model = "o4-mini" },
+        { label = "Codex o4",     provider = "codex",    model = "o4-mini", effort = "high" },
         -- Run `opencode models` or check `/model` in `gemini`/`codex` for available models. See docs/config.md.
       },
     })

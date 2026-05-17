@@ -52,6 +52,11 @@ function M.build_cmd(bin, prompt, opts)
     vim.list_extend(cmd, { "-m", opts.profile.model })
   end
 
+  if opts.profile and opts.profile.effort then
+    local eff = opts.profile.effort == "max" and "xhigh" or opts.profile.effort
+    vim.list_extend(cmd, { "-c", "model_reasoning_effort=" .. eff })
+  end
+
   table.insert(cmd, prompt)
   return cmd
 end

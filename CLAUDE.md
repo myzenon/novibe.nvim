@@ -159,7 +159,8 @@ require("novibe").setup({
 - `provider`: `"claude"` (default) | `"opencode"` | `"gemini"` | `"codex"`
 - `effort` (claude): `low`/`medium`/`high`/`xhigh`/`max` → `--effort`
 - `effort` (opencode): maps to `--variant` (values depend on model)
-- `effort` (gemini/codex): ignored (no CLI flag equivalent)
+- `effort` (codex): maps to `-c model_reasoning_effort=<value>`; `max` → `xhigh`; values: `minimal|low|medium|high|xhigh`
+- `effort` (gemini): ignored (no CLI flag equivalent)
 - `model` (claude): full ID (`claude-sonnet-4-6`) or alias (`sonnet`, `opus`)
 - `model` (opencode): `"provider/model"` (run `opencode models`)
 - `model` (gemini): full ID (run `gemini`, check `/model` in TUI)
