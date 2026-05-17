@@ -1,282 +1,246 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code when working in this repository.
 
 ## Documentation checklist
 
-When the user says "update the docs" or asks to check/update documentation, always review **all doc files** — not just CLAUDE.md:
+When the user asks to "update the docs", review **all** doc files — they drift:
 
-- `CLAUDE.md` — developer/contributor reference (file structure, core flow, CLI flags, schema)
-- `README.md` — user-facing: usage flow, commands table, key bindings, teach/gen examples
-- `docs/config.md` — user-facing: profiles, provider differences, conventions format, how it works diagram
-- `docs/teach.md` — user-facing: full teach → distill → promote lifecycle guide
+- `CLAUDE.md` — dev reference (this file): structure, flow, CLI flags, schema
+- `README.md` — user-facing: usage, commands, key bindings
+- `docs/config.md` — user-facing: profiles, providers, conventions, how-it-works
+- `docs/teach.md` — user-facing: teach → distill → promote lifecycle
 
-CLAUDE.md tends to stay current because it is in the dev loop. README.md and the docs/ files drift — check them explicitly for stale flow descriptions, missing commands, and outdated key bindings whenever user-facing behavior changes.
+CLAUDE.md stays current via the dev loop; the others need explicit checking whenever user-facing behavior changes.
 
 ## What This Plugin Does
 
-`novibe.nvim` is a minimal Neovim plugin for LazyVim. The user writes function skeletons — signatures plus descriptive comments — visually selects the block, and invokes the plugin. The selection is sent to the active AI CLI (Claude Code, opencode, or gemini) and streamed into a **fill-preview chat split** for review. The user presses `<CR>` to apply the code to the working buffer, then reviews any out-of-scope changes (imports, types, other files) in a second phase before applying them.
+`novibe.nvim` is a minimal Neovim plugin for LazyVim. The user writes function skeletons (signatures + descriptive comments), visually selects them, and invokes the plugin. The selection is sent to the active AI CLI (Claude Code, opencode, or gemini) and streamed into a **fill-preview chat split**. `<CR>` applies in-scope code, then any out-of-scope changes (imports, types, other files) are reviewed one at a time.
 
-**Philosophy:** the user is the architect. Claude fills boilerplate within boundaries the user defined. AI never makes architectural decisions.
+**Philosophy:** the user is the architect. AI fills boilerplate within user-defined boundaries; it never makes architectural decisions.
 
 ## File Structure
 
 ```
 lua/novibe/
-  init.lua     — entry point: selection capture, prompt assembly, vim.system call, streams chunks to fill-preview chat
-  config.lua   — defaults: bare flag, system_prompt, profiles, learn.auto_extract_after
+  init.lua     — entry: selection capture, prompt assembly, vim.system, streams to chat
+  config.lua   — defaults: bare, system_prompt, profiles, learn.auto_extract_after
   input.lua    — floating input window (:w submits, <Esc> cancels)
-  chat.lua     — fill-preview chat split (M.open_fill) + multi-turn follow-up float (M.open); two-phase confirm (code → out-of-scope changes); schema reminder; streams partial code via push()
-  stream.lua   — escape-aware extractor for the "code" JSON string field from partial provider stdout (handles \", \\, \n, \uXXXX)
-  context.lua  — treesitter walk to find the enclosing function/class signature above the visible context window
-  diag.lua     — formats vim.diagnostic.get() output for the selection's line range, appended to the prompt
-  apply.lua    — content-based find-and-replace across files (two-pass: strict then lenient)
-  glob.lua     — glob → Lua pattern conversion + section header matching
-  no_vibe.lua  — loads NO_VIBE.md + .no_vibe/convention-*.md + .no_vibe/learned-*.md + knowledge base (map/rule/decision), filters by filename; stale detection via git log
-  learn.lua    — #teach diff capture (.no_vibe/diffs.json) + distillation into learned-*.md topic files
-  promote.lua  — :NovibePromote flow: reads learned-*.md + convention-*.md, asks AI to graduate mature rules (n≥3) into convention files; opens M.open for review
-  consult.lua  — singleton interactive consult: opens in current window, seeds file/line/selection/conventions; supports claude, opencode, gemini TUI
-  providers/   — claude.lua, opencode.lua, gemini.lua — each exposes find_bin, build_cmd, parse_output, parse_chunk, streaming
-plugin/
-  novibe.lua   — guard + :NovibeAct, :NovibeConsult, :NovibeConsultPrompt, :NovibeProfile, :NovibeDistill, :NovibePromote user commands
+  chat.lua     — fill-preview split (M.open_fill) + legacy follow-up float (M.open);
+                 question queue, streamed code via push(), #teach interception
+  stream.lua   — escape-aware extractor for the "code" JSON field from partial stdout
+  context.lua  — treesitter walk for the enclosing function/class signature
+  diag.lua     — vim.diagnostic.get() output formatted for the selection range
+  apply.lua    — content-based find/replace across files (strict then lenient pass)
+  glob.lua     — glob → Lua pattern + section header matching
+  no_vibe.lua  — loads NO_VIBE.md + .no_vibe/{convention,learned,map,rule,decision}-*.md,
+                 filters by filename, stale detection via git log
+  learn.lua    — #teach capture (.no_vibe/diffs.json) + distillation into learned-*.md
+  promote.lua  — :NovibePromote — graduate mature rules (n≥3) into convention files
+  consult.lua  — singleton interactive consult: seeds file/line/selection/conventions
+  providers/   — claude.lua, opencode.lua, gemini.lua: find_bin, build_cmd,
+                 parse_output, parse_chunk, streaming
+plugin/novibe.lua — guard + user commands
 ```
 
 ## Core Flow
 
 ```
-Visual select skeleton (or cursor on line)
-  → input.lua float (vim.ui replacement, :w to submit)
-  → prompt assembled: system_prompt + matched convention/learned sections
-                    + treesitter enclosing signature (context.lua)
-                    + ctx_before + selection + ctx_after
-                    + LSP diagnostics for range (diag.lua)
-                    + user instruction
-  → fill-preview chat split opens immediately (chat.open_fill); focus stays on working buffer
-  → provider streams stdout (stream-json events); stream.lua progressively decodes the "code" field
-  → fill chat's push(partial) renders streamed code into the split (NOT the working buffer)
-  → spinner virt_lines stay above/below the selection in the working buffer as a visual anchor
-  → on stream completion: parse_output yields { code, message, changes, done }
-  → finalize() splits the response into a "question queue":
-       Q1   = in-scope code (if response.code is non-empty)
-       Q2.. = each entry in response.changes (out-of-scope)
-       total N = code + changes; user is shown exactly ONE question at a time
-  → Each question renders the relevant content + "[k/N]" indicator in the winbar.
-       in-scope code   → shown as raw code, "[k/N] In-scope code (will replace your selection):"
-       out-of-scope    → shown as a find/replace diff, "[k/N] Out-of-scope: <file> [<action>]"
-  → Per question the user can:
-       · <CR>            → apply this question (splice code for code-Q, apply.lua for change-Q), advance
-       · s               → skip this question (don't apply), advance
-       · :w <text>       → revise via AI; prompt anchors the AI to the current head Q.
-                           AI's revised questions replace the head Q (and any change-Qs the AI
-                           already covers, by file). Unreviewed tail questions (Q2, Q3…) are
-                           preserved and appended after the AI's new questions.
-                           Code-Q is only re-accepted if the current head was a code-Q.
-       · :w all  /  :w * → apply every remaining question (in order) and close
-       · q               → quit; previously-applied questions stay, remaining are dropped
-  → When the queue is exhausted (or the user quits), the chat closes automatically.
+Visual select → input.lua float (:w submit)
+  → prompt = system_prompt
+           + matched convention/learned/knowledge sections (by filename)
+           + treesitter enclosing signature
+           + ctx_before + selection + ctx_after
+           + LSP diagnostics for range
+           + user instruction
+  → fill-preview chat split opens (focus stays on working buffer)
+  → provider streams stdout; stream.lua decodes the "code" field progressively
+  → push(partial) renders into the split; spinner virt_lines anchor the selection
+  → on completion: parse_output → { code, message, changes, done }
+  → finalize() builds a question queue:
+       Q1   = in-scope code (if non-empty)
+       Q2.. = each entry in response.changes
+  → one Q shown at a time with "[k/N]" winbar indicator. Per Q:
+       <CR>      apply (splice for code-Q, apply.lua for change-Q), advance
+       s         skip, advance
+       :w <text> revise via AI anchored to current head Q; revised Qs replace head
+                 (and change-Qs the AI already covers, by file); unreviewed tail Qs
+                 (Q2, Q3…) are preserved
+       :w #teach <reason>  capture reason as note-mode teach; no AI call, no queue change
+       :w all    apply every remaining Q
+       q         quit; applied Qs stay
+  → queue exhausted or quit → chat closes
 ```
 
-### Multi-turn follow-up chat (M.open)
+### Legacy follow-up split (M.open)
 
-`M.open()` (the legacy split) is still available for cases where only out-of-scope changes are proposed without a fillable code field. It uses the same `<CR> apply` / `:w discuss` / `q quit` semantics plus `done:true` stays open until the user manually closes with `q`.
+`M.open()` is still available for responses with only out-of-scope changes (no fillable code). Same `<CR>` / `:w discuss` / `q` semantics; `done:true` stays open until the user closes with `q`.
 
 ## Commands
 
-- `:NovibeAct` — act on current line or explicit range (e.g. `:'<,'>NovibeAct`); input float accepts:
-  - free-form instruction → fill/modify the selection in place
-  - `#teach <reason>` → accumulate evidence for distillation (diff if editing a recent fill, otherwise a direct rule note)
-  - `#gen <description>` → project-level generation: AI proposes new files via `changes[action=create]`, shown in the question queue for file-by-file review; no selection needed
-- `:NovibeConsult` — open singleton interactive session in a vertical split; process is killed when buffer closes; `<Esc><Esc>` exits terminal mode; range `:'<,'>NovibeConsult` injects the selection. Seed includes: file, line, current git commit hash, matched `.no_vibe` sections (conventions, learned, and knowledge base), and snapshot instructions. Injected via `--append-system-prompt` for **claude**, `--prompt-interactive` for **gemini**. The AI may freely edit `CLAUDE.md` and all `.no_vibe/*.md` files; all other file modifications are off-limits. Say **"snapshot"** mid-session to have the AI write discoveries to the knowledge base. **opencode workaround:** no CLI flag exists, so use `:NovibeConsultPrompt` after the session is open — the seed is `chansend`-ed straight into opencode's input box; press Enter to submit.
-- `:NovibeConsultPrompt` — build the consult seed from the current buffer/selection and chansend it into the active consult terminal. Required for opencode (which cannot receive context via CLI); also works with claude/gemini if you want to push fresh context mid-session. Must be invoked from the source buffer, not the consult terminal.
-- `:NovibeProfile` — two-step picker: choose slot (Act / Consult), then profile. Each slot persists independently. No profile = CLI defaults.
-- `:NovibeDistill` — distill accumulated diffs from `#teach` into topic-organized `.no_vibe/learned-*.md` files (Claude decides the topic split)
-- `:NovibePromote` — review learned rules and graduate mature ones (support count n≥3) into canonical `.no_vibe/convention-*.md` files; opens the review split so changes can be inspected, revised, or skipped before applying
+- `:NovibeAct` — act on current line or range. Input float accepts:
+  - free-form instruction → fill/modify the selection
+  - `#teach <reason>` → accumulate evidence (diff if editing a recent fill, else note)
+  - `#gen <description>` → project-level generation; AI proposes new files via `changes[action=create]`, reviewed file-by-file in the question queue
+- `:NovibeConsult` — singleton interactive session in a vsplit. Process dies with buffer; `<Esc><Esc>` exits terminal mode; range injects selection. Seed = file, line, current commit hash, matched `.no_vibe` sections, snapshot instructions. Injected via `--append-system-prompt` (claude) or `--prompt-interactive` (gemini). AI may freely edit `CLAUDE.md` and `.no_vibe/*.md`; all other files off-limits. Say **"snapshot"** mid-session to persist discoveries. **opencode workaround:** no flag exists, so use `:NovibeConsultPrompt` after opening — the seed is `chansend`-ed into the input box; press Enter to submit.
+- `:NovibeConsultPrompt` — build the consult seed from current buffer/selection and chansend it into the active consult terminal. Required for opencode; optional refresh for claude/gemini. Invoke from the source buffer, not the consult terminal.
+- `:NovibeProfile` — two-step picker: slot (Act / Consult) then profile. Slots persist independently. No profile = CLI defaults.
+- `:NovibeDistill` — distill accumulated `#teach` diffs into `.no_vibe/learned-*.md` (AI decides the topic split).
+- `:NovibePromote` — graduate mature learned rules (n≥3) into canonical `.no_vibe/convention-*.md`; opens review split for inspection.
 
 ## CLI Invocation
 
-**Claude provider (`provider = "claude"`):**
+Common flags across providers — only the relevant lines shown.
+
+**Claude** (`provider = "claude"`):
 ```lua
--- streaming (default — providers/claude.lua sets M.streaming = true):
-{ claude_bin, "--continue", "--output-format", "stream-json", "--include-partial-messages", "--verbose", "--print", prompt }
--- non-streaming fallback:
-{ claude_bin, "--continue", "--output-format", "json", "--print", prompt }
--- with active profile:
-{ claude_bin, "--model", profile.model, "--effort", profile.effort, "--continue", ..., "--print", prompt }
--- with config.bare = true:
-{ claude_bin, "--bare", ..., "--continue", ..., "--print", prompt }
+-- streaming default (providers/claude.lua sets M.streaming = true):
+{ claude_bin, "--continue", "--output-format", "stream-json",
+  "--include-partial-messages", "--verbose", "--print", prompt }
+-- + "--model", profile.model, "--effort", profile.effort   (when profile active)
+-- + "--bare"                                                (when config.bare = true)
+-- non-streaming fallback: "--output-format", "json"
 ```
+`--continue` carries session context. `--bare` skips hooks/plugins/memory (safe only with `ANTHROPIC_API_KEY`, not `claude login`). Streaming: `parse_chunk` extracts `content_block_delta` text-deltas; `parse_output` scans for the final `type=="result"` line.
 
-`--continue` maintains session context across selections. `--bare` skips hooks, plugins, memory injection — only safe if auth is via `ANTHROPIC_API_KEY`, not `claude login`. `--model` and `--effort` are only added when an active profile is set. In streaming mode, `parse_chunk` extracts `content_block_delta` text-delta events and `parse_output` scans for the final `type=="result"` line.
-
-**opencode provider (`provider = "opencode"`):**
+**opencode** (`provider = "opencode"`):
 ```lua
 { opencode_bin, "run", "--format", "json", prompt }
--- with active profile:
-{ opencode_bin, "run", "--format", "json", "--model", profile.model, "--variant", profile.effort, prompt }
--- with session continuity:
-{ opencode_bin, "run", "--format", "json", "--session", session_id, prompt }
+-- + "--model", profile.model, "--variant", profile.effort   (when profile active)
+-- + "--session", session_id                                  (carries continuity)
 ```
+No `--continue`; pass back the `sessionID` from the previous response as `--session`. No `--bare`.
 
-opencode has no `--continue`; session continuity is maintained by passing the `sessionID` returned in each response back as `--session` on the next call. `--variant` maps to opencode's effort levels. `--bare` is not applicable.
-
-**gemini provider (`provider = "gemini"`):**
+**gemini** (`provider = "gemini"`):
 ```lua
--- streaming (default — providers/gemini.lua sets M.streaming = true):
 { gemini_bin, "--output-format", "stream-json", "--prompt", prompt }
--- non-streaming fallback:
-{ gemini_bin, "--output-format", "json", "--prompt", prompt }
--- with active profile:
-{ gemini_bin, "--output-format", "stream-json", "--model", profile.model, "--prompt", prompt }
--- with session continuity:
-{ gemini_bin, ..., "--session-id", session_id, "--prompt", prompt }
+-- + "--model", profile.model                                 (when profile active)
+-- + "--session-id", session_id                                (carries continuity)
+-- non-streaming fallback: "--output-format", "json"
 ```
+No `--continue` (use `--session-id` with the prev response's UUID). No effort/variant equivalent. No `--bare`. Workspace must be trusted — run `gemini` once interactively or set `GEMINI_CLI_TRUST_WORKSPACE=true`. Streaming: `parse_chunk` extracts assistant `delta=true` events.
 
-gemini has no `--continue`; session continuity uses `--session-id` with the UUID returned in the previous response's `session_id` field. No `--effort`/`--variant` equivalent. No `--bare`. The workspace must be trusted — run `gemini` interactively once and trust the directory, or set `GEMINI_CLI_TRUST_WORKSPACE=true`. In streaming mode, `parse_chunk` extracts assistant `delta=true` message events.
-
-**`:NovibeConsult` (all providers):**
+**`:NovibeConsult` (TUI mode):**
 ```lua
--- claude TUI:
-{ claude_bin, "--append-system-prompt", seed }  -- + optional --model / --effort
--- opencode TUI:
-{ opencode_bin }  -- no CLI flag for context seeding; user provides it manually
--- gemini TUI:
-{ gemini_bin, "--prompt-interactive", seed }    -- + optional --model
+{ claude_bin,   "--append-system-prompt", seed }  -- + optional --model / --effort
+{ opencode_bin }                                   -- no seed flag; use NovibeConsultPrompt
+{ gemini_bin,   "--prompt-interactive",   seed }  -- + optional --model
 ```
 
 ## Profiles
 
-User-defined in `setup()`. No defaults — must be explicit. No active profile = provider CLI chooses model and effort.
+User-defined in `setup()`. No defaults — must be explicit. No active profile = CLI defaults.
 
 ```lua
 require("novibe").setup({
   profiles = {
-    { label = "Claude Best",  provider = "claude",   model = "claude-opus-4-7",              effort = "max"  },
-    { label = "Claude Fast",  provider = "claude",   model = "claude-haiku-4-5-20251001",    effort = "low"  },
-    { label = "OC DeepSeek",  provider = "opencode", model = "opencode-go/deepseek-v4-pro",  effort = "high" },
-    { label = "Gemini Flash", provider = "gemini",   model = "gemini-2.0-flash"                              },
+    { label = "Claude Best",  provider = "claude",   model = "claude-opus-4-7",             effort = "max"  },
+    { label = "Claude Fast",  provider = "claude",   model = "claude-haiku-4-5-20251001",   effort = "low"  },
+    { label = "OC DeepSeek",  provider = "opencode", model = "opencode-go/deepseek-v4-pro", effort = "high" },
+    { label = "Gemini Flash", provider = "gemini",   model = "gemini-2.0-flash"                             },
   }
 })
 ```
 
-`provider`: `"claude"` (default), `"opencode"`, or `"gemini"`.
-`effort` for claude: `low`, `medium`, `high`, `xhigh`, `max` (maps to `--effort`).
-`effort` for opencode: maps to `--variant` (values depend on the model).
-`effort` for gemini: ignored (no CLI flag equivalent).
-`model` for claude: full ID (e.g. `claude-sonnet-4-6`) or alias (`sonnet`, `opus`).
-`model` for opencode: `"provider/model"` format (e.g. `"opencode-go/deepseek-v4-pro"`). Run `opencode models` to list available options.
-`model` for gemini: full ID (e.g. `gemini-2.0-flash`, `gemini-2.5-pro`). Run `gemini` and check `/model` in the TUI to see available options.
+- `provider`: `"claude"` (default) | `"opencode"` | `"gemini"`
+- `effort` (claude): `low`/`medium`/`high`/`xhigh`/`max` → `--effort`
+- `effort` (opencode): maps to `--variant` (values depend on model)
+- `effort` (gemini): ignored
+- `model` (claude): full ID (`claude-sonnet-4-6`) or alias (`sonnet`, `opus`)
+- `model` (opencode): `"provider/model"` (run `opencode models`)
+- `model` (gemini): full ID (run `gemini`, check `/model` in TUI)
 
 ## JSON Response Schema
 
-Claude always responds in this schema (enforced by system prompt):
+Enforced by system prompt — all providers must return this shape:
 
 ```json
 {
   "code": "modified selection only — spliced in place",
-  "message": "question, explanation, or proposal summary (null if none)",
+  "message": "question/explanation/proposal summary (null if none)",
   "changes": [
-    {
-      "file": "relative/path/from/project/root",
+    { "file": "relative/path",
       "description": "human-readable summary",
-      "action": "replace | insert_after | insert_before | delete",
-      "find": "exact existing block to locate by content",
-      "replace": "new code"
-    }
+      "action": "replace|insert_after|insert_before|create|delete",
+      "find": "exact existing block (anchor)",
+      "replace": "new code" }
   ],
   "done": true
 }
 ```
 
-`done: true` = apply changes immediately. `done: false` = open chat float for review.
+`done:true` → apply and close. `done:false` → keep chat open for review.
 
 ## apply.lua: Content Matching
 
-Never uses line numbers. Two-pass approach:
-1. **Strict** — normalize (trim each line), match including blank lines
-2. **Lenient** — match only non-empty lines, tolerate blank line count differences
+Never uses line numbers. Two-pass:
+1. **Strict** — normalize (trim each line), match including blanks
+2. **Lenient** — match non-empty lines only, tolerate blank-count differences
 
 `action` values:
-- `replace` — find block, replace with new code
-- `insert_after` — find anchor, insert new code after it
-- `insert_before` — find anchor, insert new code before it
-- `create` — write a brand-new file; `find` must be `""`. Errors if the file already exists.
-- `delete` — remove an existing file; `find` and `replace` must be `""`. Closes any open buffer for that file.
+- `replace` / `insert_after` / `insert_before` — `find` is the anchor block
+- `create` — `find` must be `""`; errors if the file exists
+- `delete` — `find` and `replace` must be `""`; closes any open buffer for that file
 
 ## Convention, Learned Rule & Knowledge Base Files
 
-Plugin walks up from `cwd` to find any of these, then filters all sections by current filename before appending to the prompt — AI never receives the full content, only matching sections. Both `:NovibeAct` and `:NovibeConsult` benefit from all layers.
+Plugin walks up from `cwd`, then filters all sections by current filename — AI receives only matching sections, never the full content. Both `:NovibeAct` and `:NovibeConsult` use all layers.
 
-Load order (concatenated in this order):
-1. `NO_VIBE.md` at project root — single-file shortcut for simple projects, still supported
-2. `.no_vibe/convention-*.md` (sorted) — human-written coding rules, split by topic
-3. `.no_vibe/learned-*.md` (sorted) — auto-distilled by `:NovibeDistill` from `#teach` diffs
-4. `.no_vibe/map-*.md` (sorted) — **dependency graph**: call chains, inheritance, who depends on what
-5. `.no_vibe/rule-*.md` (sorted) — **behavioral constraints**: how to interact with each area (e.g. "always use Class X as db proxy")
-6. `.no_vibe/decision-*.md` (sorted) — **architectural ADRs**: the why behind decisions and rejected alternatives
+Load order:
+1. `NO_VIBE.md` at project root — single-file shortcut for simple projects
+2. `.no_vibe/convention-*.md` — human-written coding rules
+3. `.no_vibe/learned-*.md` — auto-distilled from `#teach`
+4. `.no_vibe/map-*.md` — **dependency graph**: call chains, inheritance
+5. `.no_vibe/rule-*.md` — **behavioral constraints**: e.g. "always use Class X as db proxy"
+6. `.no_vibe/decision-*.md` — **architectural ADRs**: the why + rejected alternatives
 
-All files use the same section format:
+Section format (all files):
 ```markdown
-## always
-rules that apply to every file
+## always                ← loaded for every file
+rules that always apply
 
-## src/db/**
-knowledge about the db layer — loaded when working in src/db/
+## src/db/**             ← loaded only for files under src/db/
+db-layer knowledge
 
-## *.tsx, *.jsx
-rules for React components
+## *.tsx, *.jsx          ← multiple globs, comma-separated
+React rules
 ```
-
-Header is a comma-separated list of glob patterns (`*` = any non-separator, `**` = any path).
-Special header `always` always loads regardless of filename.
+Headers are comma-separated globs (`*` = non-separator, `**` = any path). `always` matches everything.
 
 ### Knowledge Base: Stale Detection
 
-`map-*`, `rule-*`, and `decision-*` sections support a `<!-- last-verified: HASH -->` comment that records the git commit when the knowledge was written:
+`map-*` / `rule-*` / `decision-*` sections support `<!-- last-verified: HASH -->`:
 
 ```markdown
 ## src/db/**
 <!-- last-verified: a3f9c2b -->
-All db interactions go through Class X as proxy (src/db/proxy.ts).
-Class Z extends Class K for auth-specific behavior.
+All db interactions go through Class X (src/db/proxy.ts).
 ```
 
-When loading, `no_vibe.lua` runs `git log HASH..HEAD -- <path>` for directory-style section headers. If the area has new commits since the hash, the section is prefixed with `⚠ STALE: N commit(s) since HASH — verify before trusting.`
+On load, `no_vibe.lua` runs `git log HASH..HEAD -- <path>` for directory-style headers. New commits → section prefixed with `⚠ STALE: N commit(s) since HASH — verify before trusting.`
 
 ### Knowledge Base: Snapshot Workflow
 
-Built exclusively during `:NovibeConsult`. Say **"snapshot"** whenever you discover something worth keeping — the AI writes it to the right file with the current commit hash. The knowledge base grows lazily as you explore the codebase, focused on areas you actually touch.
+Built exclusively in `:NovibeConsult`. Say **"snapshot"** to have the AI write a discovery to the right file with the current commit hash. Grows lazily, focused on areas you actually touch.
 
-Three file types, each covering a different concern:
-- `map-<area>.md` — structural: dependency chains, call graphs, inheritance
-- `rule-<area>.md` — behavioral: constraints on how to interact with an area
-- `decision-<area>.md` — reasoning: why something was built a certain way, what was rejected
+- `map-<area>.md` — structural (dependencies, call graphs)
+- `rule-<area>.md` — behavioral (constraints on interacting with the area)
+- `decision-<area>.md` — reasoning (why, what was rejected)
 
-Keep entries concise — the goal is a pointer to what matters, not a copy of the code.
+Keep entries concise — a pointer to what matters, not a copy of the code.
 
 ## #teach / Distillation Flow
 
-`#teach <reason>` accumulates evidence into `.no_vibe/diffs.json` in two modes:
+`#teach <reason>` accumulates evidence into `.no_vibe/diffs.json`. Three entry points:
 
-- **Diff mode** — after a `:NovibeAct` fill, the user edits the result, re-selects, and runs `:NovibeAct` with `#teach <reason>`. The diff (original vs current selection) is captured.
-- **Note mode** — `:NovibeAct` on any selection with `#teach <reason>` (no recent fill in this buffer required). The selection + reason is captured as a direct rule note, with no `original` field. Distillation treats both kinds as equally valid evidence.
+- **Diff mode** (`:NovibeAct`) — after a fill, edit the result, re-select, `:NovibeAct #teach <reason>`. The diff (original fill vs current selection) is captured.
+- **Note mode** (`:NovibeAct`) — `:NovibeAct #teach <reason>` on any selection. Selection + reason captured; no `original` field.
+- **Chat note mode** — `:w #teach <reason>` inside the fill-preview chat. Reason-only entry (no diff, no `current`) — chat feedback is verbal, so an AI→AI diff would be misleading. Side-effect only: no AI call, no queue change.
 
-The plugin picks the mode automatically: if `_last_fill` exists for the current buffer and the selection differs from the last fill's output, it's a diff; otherwise it's a note. Both require a non-empty reason if there's no diff to infer from.
+`:NovibeAct` picks diff vs note automatically: diff if `_last_fill` exists for the buffer and the selection differs from the last fill's output; otherwise note. Both require a non-empty reason if there's no diff to infer from.
 
-`#teach <reason>` also works inside the fill-preview chat — type it after the marker and `:w`. This is pure note mode: only the reason text is captured (no diff, since chat feedback is verbal — the user describes the rule in words rather than writing corrected code). Useful for capturing a rule mid-review without leaving the chat. The teach is side-effect only: no AI call, no change to the question queue.
-
-Auto-distillation triggers when accumulated diffs reach the threshold:
-- **1** if no `learned-*.md` files exist yet (fresh project — fast feedback)
+Auto-distillation threshold:
+- **1** when no `learned-*.md` exists yet (fresh project — fast feedback)
 - `learn.auto_extract_after` (default 3) once any learned file exists
 
-`M.extract()` reads all existing `learned-*.md` files + new diffs, sends them to Claude with instructions to merge/dedupe and split by topic, then rewrites the affected files. Filenames must match `learned-[%w-]+%.md` for safety. Diffs are cleared after a successful distill.
-
-## Key Lua APIs Used
-
-- `vim.fn.getpos("'<")` / `vim.fn.getpos("'>")` — visual selection marks (after feedkeys Esc)
-- `vim.api.nvim_buf_get_lines()` / `nvim_buf_set_lines()` — read/write buffer
-- `vim.system(cmd, {text=true}, callback)` — async shell out (Neovim 0.10+)
-- `vim.api.nvim_buf_set_extmark()` with `virt_lines` — inline spinner above/below selection
-- `vim.uv.new_timer()` — spinner animation
-- `vim.api.nvim_open_win()` — floating windows (input + chat)
-- `vim.api.nvim_buf_add_highlight()` — diff colors in chat float
-- `vim.bo[buf].buftype = "acwrite"` + `BufWriteCmd` autocmd — `:w` to submit floats
+`M.extract()` sends accumulated diffs + existing `learned-*.md` to the AI to merge/dedupe and split by topic. Filenames must match `learned-[%w-]+%.md`. Diffs are cleared on success.
