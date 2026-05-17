@@ -92,7 +92,7 @@ vim.api.nvim_create_user_command("NovibeReset", function()
   local novibe = require("novibe")
   novibe._skip_continue       = true
   novibe._session_count       = 0
-  novibe._opencode_session_id = nil
+  novibe._session_id = nil
   vim.notify("novibe: session reset — next fill starts a fresh conversation", vim.log.levels.INFO)
 end, { desc = "novibe: reset session (next fill starts fresh)" })
 

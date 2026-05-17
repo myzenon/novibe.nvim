@@ -13,7 +13,7 @@ M._session_count        = 0      -- fills since last reset
 M._skip_continue        = false  -- set true by :NovibeReset; consumed on next fill
 M._session_cost         = 0.0    -- cumulative USD this Neovim session
 M._last_usage           = nil    -- usage table from most recent fill
-M._session_id  = nil    -- captured from opencode response, reused for next fill
+M._session_id  = nil    -- session/thread ID from provider response, reused for continuity
 
 local SESSION_WARN_AFTER = 10
 
