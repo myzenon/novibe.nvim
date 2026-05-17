@@ -15,7 +15,7 @@ CLAUDE.md stays current via the dev loop; the others need explicit checking when
 
 ## What This Plugin Does
 
-`novibe.nvim` is a minimal Neovim plugin for LazyVim. The user writes function skeletons (signatures + descriptive comments), visually selects them, and invokes the plugin. The selection is sent to the active AI CLI (Claude Code, opencode, or gemini) and streamed into a **fill-preview chat split**. `<CR>` applies in-scope code, then any out-of-scope changes (imports, types, other files) are reviewed one at a time.
+`novibe.nvim` is a minimal Neovim plugin for LazyVim. The user writes function skeletons (signatures + descriptive comments), visually selects them, and invokes the plugin. The selection is sent to the active AI CLI (Claude Code, opencode, gemini, or codex) and streamed into a **fill-preview chat split**. `<CR>` applies in-scope code, then any out-of-scope changes (imports, types, other files) are reviewed one at a time.
 
 **Philosophy:** the user is the architect. AI fills boilerplate within user-defined boundaries; it never makes architectural decisions.
 
@@ -38,7 +38,7 @@ lua/novibe/
   learn.lua    — #teach capture (.no_vibe/diffs.json) + distillation into learned-*.md
   promote.lua  — :NovibePromote — graduate mature rules (n≥3) into convention files
   consult.lua  — singleton interactive consult: seeds file/line/selection/conventions
-  providers/   — claude.lua, opencode.lua, gemini.lua: find_bin, build_cmd,
+  providers/   — claude.lua, opencode.lua, gemini.lua, codex.lua: find_bin, build_cmd,
                  parse_output, parse_chunk, streaming
 plugin/novibe.lua — guard + user commands
 ```
@@ -83,7 +83,7 @@ Visual select → input.lua float (:w submit)
   - `#teach <reason>` → accumulate evidence (diff if editing a recent fill, else note)
   - `#gen <description>` → project-level generation; AI proposes new files via `changes[action=create]`, reviewed file-by-file in the question queue
 - `:NovibeConsult` — singleton interactive session in a vsplit. Process dies with buffer; `<Esc><Esc>` exits terminal mode; range injects selection. Seed = file, line, current commit hash, matched `.no_vibe` sections, snapshot instructions. Injected via `--append-system-prompt` (claude) or `--prompt-interactive` (gemini). AI may freely edit `CLAUDE.md` and `.no_vibe/*.md`; all other files off-limits. Say **"snapshot"** mid-session to persist discoveries. **opencode workaround:** no flag exists, so use `:NovibeConsultPrompt` after opening — the seed is `chansend`-ed into the input box; press Enter to submit.
-- `:NovibeConsultPrompt` — build the consult seed from current buffer/selection and chansend it into the active consult terminal. Required for opencode; optional refresh for claude/gemini. Invoke from the source buffer, not the consult terminal.
+- `:NovibeConsultPrompt` — build the consult seed from current buffer/selection and chansend it into the active consult terminal. Required for opencode; optional refresh for claude/gemini/codex. Invoke from the source buffer, not the consult terminal.
 - `:NovibeProfile` — two-step picker: slot (Act / Consult) then profile. Slots persist independently. No profile = CLI defaults.
 - `:NovibeDistill` — distill accumulated `#teach` diffs into `.no_vibe/learned-*.md` (AI decides the topic split).
 - `:NovibePromote` — graduate mature learned rules (n≥3) into canonical `.no_vibe/convention-*.md`; opens review split for inspection.

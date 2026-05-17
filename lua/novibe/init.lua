@@ -13,7 +13,7 @@ M._session_count        = 0      -- fills since last reset
 M._skip_continue        = false  -- set true by :NovibeReset; consumed on next fill
 M._session_cost         = 0.0    -- cumulative USD this Neovim session
 M._last_usage           = nil    -- usage table from most recent fill
-M._opencode_session_id  = nil    -- captured from opencode response, reused for next fill
+M._session_id  = nil    -- captured from opencode response, reused for next fill
 
 local SESSION_WARN_AFTER = 10
 
@@ -271,9 +271,9 @@ function M.fill(line1, line2)
       local profile = config.options.active_profile
       local fill_chat = chat.open_fill(
         { bufnr = nil, start_line = 1, end_line = 1 },
-        { bin = bin, provider = provider, session_id = M._opencode_session_id,
+        { bin = bin, provider = provider, session_id = M._session_id,
           profile = profile, auto_after = config.options.learn and config.options.learn.auto_extract_after,
-          on_session_update = function(sid) M._opencode_session_id = sid end,
+          on_session_update = function(sid) M._session_id = sid end,
           on_cancel = function()
             if gen_job then pcall(function() gen_job:kill(9) end); gen_job = nil end
           end }
@@ -285,7 +285,7 @@ function M.fill(line1, line2)
         profile      = profile,
         bare         = config.options.bare,
         use_continue = carry,
-        session_id   = carry and M._opencode_session_id or nil,
+        session_id   = carry and M._session_id or nil,
         stream       = provider.streaming,
       })
 
@@ -394,9 +394,9 @@ function M.fill(line1, line2)
         on_apply = function(code)
           M._last_fill = { original = vim.trim(code), bufnr = bufnr, start_line = start_line }
         end },
-      { bin = bin, provider = provider, session_id = M._opencode_session_id,
+      { bin = bin, provider = provider, session_id = M._session_id,
         profile = profile, auto_after = config.options.learn and config.options.learn.auto_extract_after,
-        on_session_update = function(sid) M._opencode_session_id = sid end,
+        on_session_update = function(sid) M._session_id = sid end,
         on_cancel = function()
           if init_job then pcall(function() init_job:kill(9) end); init_job = nil end
           stop_spinner()
@@ -409,7 +409,7 @@ function M.fill(line1, line2)
       profile      = profile,
       bare         = config.options.bare,
       use_continue = carry,
-      session_id   = carry and M._opencode_session_id or nil,
+      session_id   = carry and M._session_id or nil,
       stream       = provider.streaming,
     })
 
