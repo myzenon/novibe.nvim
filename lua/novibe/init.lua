@@ -268,16 +268,16 @@ function M.fill(line1, line2)
       local prompt      = M._build_gen_prompt(description, root, no_vibe_txt, buf_name, selection)
 
       local gen_job = nil
+      local profile = config.options.active_profile
       local fill_chat = chat.open_fill(
         { bufnr = nil, start_line = 1, end_line = 1 },
         { bin = bin, provider = provider, session_id = M._opencode_session_id,
+          profile = profile, auto_after = config.options.learn and config.options.learn.auto_extract_after,
           on_session_update = function(sid) M._opencode_session_id = sid end,
           on_cancel = function()
             if gen_job then pcall(function() gen_job:kill(9) end); gen_job = nil end
           end }
       )
-
-      local profile = config.options.active_profile
       local carry   = not M._skip_continue
       M._skip_continue = false
 
@@ -386,6 +386,8 @@ function M.fill(line1, line2)
     local stop_spinner = start_spinner(bufnr, start_line, end_line)
     local init_job     = nil
 
+    local profile = config.options.active_profile
+
     -- open fill chat immediately — no focus steal, streaming goes here
     local fill_chat = chat.open_fill(
       { bufnr = bufnr, start_line = start_line, end_line = end_line,
@@ -393,14 +395,13 @@ function M.fill(line1, line2)
           M._last_fill = { original = vim.trim(code), bufnr = bufnr, start_line = start_line }
         end },
       { bin = bin, provider = provider, session_id = M._opencode_session_id,
+        profile = profile, auto_after = config.options.learn and config.options.learn.auto_extract_after,
         on_session_update = function(sid) M._opencode_session_id = sid end,
         on_cancel = function()
           if init_job then pcall(function() init_job:kill(9) end); init_job = nil end
           stop_spinner()
         end }
     )
-
-    local profile = config.options.active_profile
     local carry = not M._skip_continue
     M._skip_continue = false
 

@@ -158,7 +158,7 @@ Filenames must match: learned-<topic>.md]],
       table.insert(parts, diff.original)
       table.insert(parts, "User changed to:")
       table.insert(parts, diff.current)
-    else
+    elseif diff.current then
       table.insert(parts, "User code (direct teaching — no AI diff):")
       table.insert(parts, diff.current)
     end

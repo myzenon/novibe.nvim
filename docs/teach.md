@@ -59,6 +59,22 @@ No diff here — the selection itself is the evidence. Distillation treats it as
 - You notice existing code following a pattern worth formalizing
 - The fill was correct but you want to reinforce the pattern anyway
 
+### From the chat — capture feedback as a rule
+
+`#teach <reason>` also works inside the fill-preview chat. Type it after the marker and `:w` — the reason is captured as a note-mode teach entry; no AI call, no change to the current question:
+
+```
+[1/2] In-scope code:
+function load(id) {
+  return db.query(`SELECT * FROM users WHERE id = ${id}`)
+}
+
+── <CR> accept  ·  type feedback + :w to send ──
+#teach never interpolate into raw SQL — use parameterized queries
+```
+
+Use this when you're reviewing AI output and notice a rule worth keeping, but don't want to derail the current revision. Pure note mode — no diff captured, because chat feedback is verbal (you describe the rule in words rather than writing the corrected code yourself).
+
 ---
 
 ## Distillation

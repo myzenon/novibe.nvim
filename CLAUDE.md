@@ -262,6 +262,8 @@ Keep entries concise — the goal is a pointer to what matters, not a copy of th
 
 The plugin picks the mode automatically: if `_last_fill` exists for the current buffer and the selection differs from the last fill's output, it's a diff; otherwise it's a note. Both require a non-empty reason if there's no diff to infer from.
 
+`#teach <reason>` also works inside the fill-preview chat — type it after the marker and `:w`. This is pure note mode: only the reason text is captured (no diff, since chat feedback is verbal — the user describes the rule in words rather than writing corrected code). Useful for capturing a rule mid-review without leaving the chat. The teach is side-effect only: no AI call, no change to the question queue.
+
 Auto-distillation triggers when accumulated diffs reach the threshold:
 - **1** if no `learned-*.md` files exist yet (fresh project — fast feedback)
 - `learn.auto_extract_after` (default 3) once any learned file exists

@@ -1,4 +1,5 @@
 local apply = require("novibe.apply")
+local learn = require("novibe.learn")
 
 local M = {}
 
@@ -611,6 +612,18 @@ function M.open_fill(pending, opts)
     return ""
   end
 
+  local function clear_reply()
+    local all = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    for i = #all, 1, -1 do
+      if all[i] == MARKER then
+        vim.bo[buf].modifiable = true
+        vim.api.nvim_buf_set_lines(buf, i, -1, false, { "" })
+        vim.bo[buf].modified = false
+        return
+      end
+    end
+  end
+
   local function fill_spinner()
     local frame = 1
     local timer = vim.uv.new_timer()
@@ -690,6 +703,17 @@ function M.open_fill(pending, opts)
         close()
         return
       end
+    end
+
+    -- "#teach <reason>" — capture feedback as a note-mode teach entry without
+    -- sending to AI. The reason text IS the rule; no diff needed since the user
+    -- never wrote the corrected code directly (only described it in words).
+    local teach_reason = reply:match("^#teach%s+(.*)")
+    if teach_reason and teach_reason ~= "" then
+      local filename = pending.bufnr and vim.api.nvim_buf_get_name(pending.bufnr) or ""
+      learn.teach(nil, nil, teach_reason, filename, provider, bin, opts.auto_after, opts.profile)
+      clear_reply()
+      return
     end
 
     -- Supersede any in-flight send so we don't end up with stacking spinners,
