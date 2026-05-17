@@ -120,11 +120,24 @@ No `--continue`; pass back the `sessionID` from the previous response as `--sess
 ```
 No `--continue` (use `--session-id` with the prev response's UUID). No effort/variant equivalent. No `--bare`. Workspace must be trusted — run `gemini` once interactively or set `GEMINI_CLI_TRUST_WORKSPACE=true`. Streaming: `parse_chunk` extracts assistant `delta=true` events.
 
+**codex** (`provider = "codex"`):
+```lua
+-- fresh session:
+{ codex_bin, "exec", "--json", "--sandbox", "read-only",
+  "-c", 'instructions="<toml-escaped system prompt>"', prompt }
+-- resume (session_id = thread_id from previous thread.started event):
+{ codex_bin, "exec", "resume", session_id, "--json",
+  "-c", 'instructions="<toml-escaped system prompt>"', prompt }
+-- + "-m", profile.model   (when profile active; no effort equivalent)
+```
+Non-streaming: all JSONL events arrive at once. `parse_output` finds the `item.completed` event with `item.type=="agent_message"` for the response text; `thread.started` carries the `thread_id` used as `session_id`. System prompt is injected via `-c instructions="..."` (TOML-escaped). Codex is instructed not to run shell commands so it responds immediately with JSON.
+
 **`:NovibeConsult` (TUI mode):**
 ```lua
 { claude_bin,   "--append-system-prompt", seed }  -- + optional --model / --effort
 { opencode_bin }                                   -- no seed flag; use NovibeConsultPrompt
 { gemini_bin,   "--prompt-interactive",   seed }  -- + optional --model
+{ codex_bin,    seed }                             -- seed as initial prompt positional arg
 ```
 
 ## Profiles
@@ -138,17 +151,19 @@ require("novibe").setup({
     { label = "Claude Fast",  provider = "claude",   model = "claude-haiku-4-5-20251001",   effort = "low"  },
     { label = "OC DeepSeek",  provider = "opencode", model = "opencode-go/deepseek-v4-pro", effort = "high" },
     { label = "Gemini Flash", provider = "gemini",   model = "gemini-2.0-flash"                             },
+    { label = "Codex o4",     provider = "codex",    model = "o4-mini"                                      },
   }
 })
 ```
 
-- `provider`: `"claude"` (default) | `"opencode"` | `"gemini"`
+- `provider`: `"claude"` (default) | `"opencode"` | `"gemini"` | `"codex"`
 - `effort` (claude): `low`/`medium`/`high`/`xhigh`/`max` → `--effort`
 - `effort` (opencode): maps to `--variant` (values depend on model)
-- `effort` (gemini): ignored
+- `effort` (gemini/codex): ignored (no CLI flag equivalent)
 - `model` (claude): full ID (`claude-sonnet-4-6`) or alias (`sonnet`, `opus`)
 - `model` (opencode): `"provider/model"` (run `opencode models`)
 - `model` (gemini): full ID (run `gemini`, check `/model` in TUI)
+- `model` (codex): model ID (e.g. `o4-mini`, `o3`); run `codex` and check available models
 
 ## JSON Response Schema
 

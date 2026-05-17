@@ -131,6 +131,11 @@ function M.open(line1, line2, has_range)
     cmd = { bin }
     if profile and profile.model then vim.list_extend(cmd, { "--model", profile.model }) end
     vim.list_extend(cmd, { "--prompt-interactive", seed })
+  elseif provider_name == "codex" then
+    -- codex TUI accepts an optional initial prompt as a positional argument
+    cmd = { bin }
+    if profile and profile.model then vim.list_extend(cmd, { "-m", profile.model }) end
+    table.insert(cmd, seed)
   else
     -- claude: inject context via system prompt
     cmd = { bin }
