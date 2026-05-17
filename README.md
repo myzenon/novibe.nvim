@@ -2,7 +2,7 @@
 
 > _"No vibe, just smart auto completion."_
 
-A minimal Neovim plugin that uses your AI coding CLI ([Claude Code](https://claude.ai/code), [opencode](https://opencode.ai/), or [Gemini CLI](https://geminicli.com/)) as a **code fulfillment tool, not a vibe coder**.
+A minimal Neovim plugin that uses your AI coding CLI ([Claude Code](https://claude.ai/code), [opencode](https://opencode.ai/), [Gemini CLI](https://geminicli.com/), or [OpenAI Codex](https://github.com/openai/codex)) as a **code fulfillment tool, not a vibe coder**.
 
 You design the structure. You write the skeleton — function signature, comments describing intent and algorithm. The model fills the implementation within your boundaries. You already understand the code because you designed it.
 
@@ -17,7 +17,7 @@ You design the structure. You write the skeleton — function signature, comment
 ## Requirements
 
 - Neovim 0.10+
-- One of: [Claude Code CLI](https://claude.ai/code) (`claude login`), [opencode](https://opencode.ai/) (`opencode auth login`), or [Gemini CLI](https://geminicli.com/) (`gemini auth`)
+- One of: [Claude Code CLI](https://claude.ai/code) (`claude login`), [opencode](https://opencode.ai/) (`opencode auth login`), [Gemini CLI](https://geminicli.com/) (`gemini auth`), or [OpenAI Codex](https://github.com/openai/codex) (`codex login`)
 - [lazy.nvim](https://github.com/folke/lazy.nvim)
 - [snacks.nvim](https://github.com/folke/snacks.nvim) — file picker (`<C-f>`) in the input float
 
@@ -41,7 +41,8 @@ You design the structure. You write the skeleton — function signature, comment
         { label = "OC DeepSeek",  provider = "opencode", model = "opencode-go/deepseek-v4-pro", effort = "high", file_context = false },
         { label = "OC Qwen",      provider = "opencode", model = "opencode-go/qwen3.6-plus",    effort = "high", file_context = true },
         { label = "Gemini Flash", provider = "gemini",   model = "gemini-2.0-flash" },
-        -- Run `opencode models` (or check `/model` in `gemini`) to see everything available. See docs/config.md.
+        { label = "Codex o4",     provider = "codex",    model = "o4-mini" },
+        -- Run `opencode models` or check `/model` in `gemini`/`codex` for available models. See docs/config.md.
       },
     })
   end,
@@ -117,7 +118,7 @@ AI proposes each file as a separate queue entry — same `<CR>`/`s`/`:w` review 
 | Command              | What                                                         |
 | -------------------- | ------------------------------------------------------------ |
 | `:NovibeAct`         | Fill selection (or current line) · `#gen <desc>` to generate new files · `#teach <reason>` to capture style evidence |
-| `:NovibeConsult`     | Open interactive consult session (vsplit); claude / gemini: context auto-injected; opencode: manual |
+| `:NovibeConsult`     | Open interactive consult session (vsplit); claude / gemini / codex: context auto-injected; opencode: manual |
 | `:NovibeConsultPrompt` | Push consult seed into the active consult terminal (required for opencode; works with any provider) |
 | `:NovibeProfile`     | Two-step picker: choose slot (Act / Consult), then profile   |
 | `:NovibeReset`       | Start a fresh session on the next fill                       |

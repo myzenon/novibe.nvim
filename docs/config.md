@@ -58,6 +58,10 @@ require("novibe").setup({
     -- Gemini CLI (no effort/variant equivalent)
     { label = "Gemini Flash", provider = "gemini", model = "gemini-2.0-flash" },
     { label = "Gemini Pro",   provider = "gemini", model = "gemini-2.5-pro" },
+
+    -- OpenAI Codex (no effort/variant equivalent)
+    { label = "Codex o4-mini", provider = "codex", model = "o4-mini" },
+    { label = "Codex o3",      provider = "codex", model = "o3" },
   },
 })
 ```
@@ -66,7 +70,7 @@ Switching profiles via `:NovibeProfile` swaps everything atomically. LazyVim wit
 
 ### Fields
 
-**`provider`** — `"claude"` (default if omitted), `"opencode"`, or `"gemini"`.
+**`provider`** — `"claude"` (default if omitted), `"opencode"`, `"gemini"`, or `"codex"`.
 
 **`model`** — full model ID or alias accepted by the active provider's CLI.
 
@@ -82,6 +86,8 @@ For **opencode**: use `provider/model` format. Run `opencode models` to list eve
 
 For **Gemini CLI**: full model ID, e.g. `gemini-2.0-flash`, `gemini-2.5-pro`. Check `/model` in an interactive `gemini` session to see what's available.
 
+For **Codex**: model ID, e.g. `o4-mini`, `o3`. Check available models in an interactive `codex` session.
+
 **`file_context`** — `true` injects sibling files (same directory) and parsed imports from the current buffer into the prompt as a "Project files" list. The model is instructed to only reference these paths in `changes[]`. Defaults to `false`.
 
 Recommended for cheaper / less reliable models that tend to hallucinate file paths (e.g. inventing `src/components/X.tsx` when a component is actually inline). Disable for Claude Opus / Sonnet — they generally don't need it and you save tokens.
@@ -90,7 +96,7 @@ Recommended for cheaper / less reliable models that tend to hallucinate file pat
 { label = "OC GPT-5", provider = "opencode", model = "openai/gpt-5", effort = "high", file_context = true }
 ```
 
-**`effort`** — Claude maps to `--effort`, opencode maps to `--variant`. Gemini has no equivalent and ignores this field.
+**`effort`** — Claude maps to `--effort`, opencode maps to `--variant`. Gemini and Codex have no equivalent and ignore this field.
 
 | Level | Notes |
 |---|---|
@@ -106,7 +112,7 @@ Recommended for cheaper / less reliable models that tend to hallucinate file pat
 
 ## Provider differences
 
-All three providers are first-class. novibe normalizes most of the differences (session continuity, JSON output, usage stats), but a few CLI quirks surface in the UI. Knowing them helps you read the status line and pick the right `effort` level.
+All four providers are first-class. novibe normalizes most of the differences (session continuity, JSON output, usage stats), but a few CLI quirks surface in the UI. Knowing them helps you read the status line and pick the right `effort` level.
 
 ### Claude Code
 
@@ -133,6 +139,18 @@ All three providers are first-class. novibe normalizes most of the differences (
 - **Cost**: not reported by the CLI (free tier).
 - **Context window %**: not exposed — Gemini CLI doesn't report context window size.
 - **Consult**: context is injected via `--prompt-interactive` (gemini's equivalent of claude's `--append-system-prompt`).
+
+### OpenAI Codex
+
+- **Sessions**: novibe captures `thread_id` from the first response and reuses it via `codex exec resume <thread_id>` for follow-up fills. `:NovibeReset` clears it.
+- **Non-streaming**: unlike the other providers, codex delivers all output at once (no streaming). The fill-preview split won't animate — it appears complete when the response arrives.
+- **`bare` mode**: silently ignored — Claude-only.
+- **`effort`**: no equivalent — codex has no reasoning effort flag, so the `effort` field is ignored.
+- **System prompt**: novibe injects its JSON schema instructions via codex's `-c instructions="..."` config override, which replaces codex's built-in system prompt. This keeps codex focused on JSON output instead of its default agentic behavior.
+- **Shell commands**: codex is an agentic tool and may try to run shell commands before answering. novibe instructs it not to, which keeps responses fast. If you see `item.command_execution` events in debug output, the instruction was overridden by the model — simplify the prompt or try a different model.
+- **Cost**: not reported by the CLI.
+- **Context window %**: not exposed.
+- **Consult**: seed is passed as the initial prompt positional argument (`codex "seed"`), which starts the interactive TUI with context pre-loaded.
 
 ---
 
@@ -331,6 +349,7 @@ Write skeleton → visual select → <leader>aa  (or #gen for new files)
                   + your instruction
                                       ↓
           provider.build_cmd() → claude / opencode / gemini  (streaming)
+                                   codex                    (non-streaming)
                                       ↓
               fill-preview split opens immediately (right vsplit, no focus steal)
               partial code streams into the split as chunks arrive
