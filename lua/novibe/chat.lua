@@ -521,7 +521,7 @@ function M.open_fill(pending, opts)
         "%%#Title# novibe [%d/%d] %%#Normal# in-scope  ·  <CR> apply  ·  s skip  ·  :w feedback  ·  q quit",
         idx, total
       ))
-    else
+    elseif q.type == "change" then
       local ch = q.change
       push(string.format("[%d/%d] Out-of-scope: %s  [%s]",
         idx, total, ch.file or "?", ch.action or "replace"), "Title")
@@ -574,6 +574,9 @@ function M.open_fill(pending, opts)
         "%%#WarningMsg# [%d/%d] out-of-scope %%#Normal# ·  <CR> apply  ·  s skip  ·  :w feedback  ·  :w all  ·  q quit",
         idx, total
       ))
+    else
+      -- message-only: last_message banner already rendered above; just set winbar
+      set_winbar("%%#Title# novibe %%#Normal# AI message  ·  :w reply  ·  <CR> close  ·  q quit")
     end
 
     local content = vim.list_extend(vim.deepcopy(lines), { "", MARKER, "" })
@@ -638,6 +641,7 @@ function M.open_fill(pending, opts)
   -- Apply one question. Returns true on success; false (+ notify) on failure
   -- so confirm() can stay on the question instead of silently advancing.
   local function apply_q(q)
+    if q.type == "message" then return true end
     if q.type == "code" then
       if not (q.code and pending.bufnr and vim.api.nvim_buf_is_valid(pending.bufnr)) then
         vim.notify("novibe: working buffer is gone — cannot apply code", vim.log.levels.ERROR)
@@ -689,7 +693,7 @@ function M.open_fill(pending, opts)
   local function send()
     if done or not sending_enabled then return end
     local reply = extract_reply()
-    if is_confirm(reply) then confirm(); return end
+    if is_confirm(reply) and (not questions[1] or questions[1].type ~= "message") then confirm(); return end
 
     -- ":w all" / ":w *" — apply EVERY remaining question in order. If one
     -- fails, stop on it so the user can revise or skip.
@@ -816,9 +820,12 @@ function M.open_fill(pending, opts)
       end
       if #questions == 0 then
         if last_message then
-          vim.notify("novibe AI: " .. last_message, vim.log.levels.INFO)
+          questions = { { type = "message" } }
+          total = 1
+          render_q()
+        else
+          close()
         end
-        close()
       else
         render_q()
       end
@@ -893,12 +900,16 @@ function M.open_fill(pending, opts)
 
     if #questions == 0 then
       if last_message then
-        vim.notify("novibe AI: " .. last_message, vim.log.levels.INFO)
+        table.insert(questions, { type = "message" })
+        total = 1
+        set_pending_indicator()
+        render_q()
+        return
       else
         vim.notify("novibe: AI returned nothing to apply — closing", vim.log.levels.WARN)
+        close()
+        return
       end
-      close()
-      return
     end
 
     local code_count, change_count = 0, 0
