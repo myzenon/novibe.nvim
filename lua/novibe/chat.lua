@@ -887,7 +887,23 @@ function M.open_fill(pending, opts)
 
     questions = {}
     if pending.bufnr and response.code and response.code ~= vim.NIL and response.code ~= "" then
-      table.insert(questions, { type = "code", code = vim.trim(response.code) })
+      local new_code = vim.trim(response.code)
+      -- Suppress code question when AI echoes back identical content with only
+      -- whitespace/indentation differences (e.g. answering a question, not editing).
+      local orig_lines = vim.api.nvim_buf_is_valid(pending.bufnr)
+        and vim.api.nvim_buf_get_lines(pending.bufnr, pending.start_line - 1, pending.end_line, false)
+        or {}
+      local function norm(s)
+        local t = {}
+        for l in (s .. "\n"):gmatch("([^\n]*)\n") do
+          local trimmed = vim.trim(l)
+          if trimmed ~= "" then table.insert(t, trimmed) end
+        end
+        return table.concat(t, "\n")
+      end
+      if norm(new_code) ~= norm(table.concat(orig_lines, "\n")) then
+        table.insert(questions, { type = "code", code = new_code })
+      end
     end
     for _, ch in ipairs(normalize_changes(response.changes)) do
       table.insert(questions, { type = "change", change = ch })
