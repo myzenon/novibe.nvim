@@ -3,7 +3,8 @@ local learn = require("novibe.learn")
 
 local M = {}
 
-local MARKER = "── <CR> accept  ·  type feedback + :w to send ──────────────────────────────────"
+local MARKER     = "── <CR> accept  ·  type feedback + :w to send ──────────────────────────────────"
+local MARKER_MSG = "── type reply + :w to send ─────────────────────────────────────────────────────"
 
 local spinner_frames = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
 
@@ -579,7 +580,8 @@ function M.open_fill(pending, opts)
       set_winbar("%%#Title# novibe %%#Normal# AI message  ·  :w reply  ·  q quit")
     end
 
-    local content = vim.list_extend(vim.deepcopy(lines), { "", MARKER, "" })
+    local marker  = (q.type == "message") and MARKER_MSG or MARKER
+    local content = vim.list_extend(vim.deepcopy(lines), { "", marker, "" })
     vim.bo[buf].modifiable = true
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, content)
     vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
@@ -605,10 +607,12 @@ function M.open_fill(pending, opts)
     end
   end
 
+  local function is_marker(line) return line == MARKER or line == MARKER_MSG end
+
   local function extract_reply()
     local all = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
     for i = #all, 1, -1 do
-      if all[i] == MARKER then
+      if is_marker(all[i]) then
         return vim.trim(table.concat(vim.list_slice(all, i + 1), "\n"))
       end
     end
@@ -618,7 +622,7 @@ function M.open_fill(pending, opts)
   local function clear_reply()
     local all = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
     for i = #all, 1, -1 do
-      if all[i] == MARKER then
+      if is_marker(all[i]) then
         vim.bo[buf].modifiable = true
         vim.api.nvim_buf_set_lines(buf, i, -1, false, { "" })
         vim.bo[buf].modified = false
