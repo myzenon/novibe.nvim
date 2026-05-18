@@ -576,7 +576,7 @@ function M.open_fill(pending, opts)
       ))
     else
       -- message-only: last_message banner already rendered above; just set winbar
-      set_winbar("%%#Title# novibe %%#Normal# AI message  ·  :w reply  ·  <CR> close  ·  q quit")
+      set_winbar("%%#Title# novibe %%#Normal# AI message  ·  :w reply  ·  q quit")
     end
 
     local content = vim.list_extend(vim.deepcopy(lines), { "", MARKER, "" })
