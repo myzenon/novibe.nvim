@@ -7,6 +7,10 @@ vim.api.nvim_create_user_command("NovibeConsult", function(opts)
   require("novibe.consult").open(opts.line1, opts.line2, opts.range > 0)
 end, { range = true, desc = "novibe: open interactive consult session with current file/selection context" })
 
+vim.api.nvim_create_user_command("NovibeAgent", function(opts)
+  require("novibe.consult").open_agent(opts.line1, opts.line2, opts.range > 0)
+end, { range = true, desc = "novibe: open agent session — plan then execute with full project access" })
+
 vim.api.nvim_create_user_command("NovibeConsultPrompt", function(opts)
   require("novibe.consult").send_prompt(opts.line1, opts.line2, opts.range > 0)
 end, { range = true, desc = "novibe: send current file/selection context to active consult terminal (for opencode)" })
