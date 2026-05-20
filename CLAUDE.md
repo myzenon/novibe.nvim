@@ -15,7 +15,7 @@ CLAUDE.md stays current via the dev loop; the others need explicit checking when
 
 ## What This Plugin Does
 
-`novibe.nvim` is a minimal Neovim plugin for LazyVim. The user writes function skeletons (signatures + descriptive comments), visually selects them, and invokes the plugin. The selection is sent to the active AI CLI (Claude Code, opencode, gemini, or codex) and streamed into a **fill-preview chat split**. `<CR>` applies in-scope code, then any out-of-scope changes (imports, types, other files) are reviewed one at a time.
+`novibe.nvim` is a minimal Neovim plugin for LazyVim. The user writes function skeletons (signatures + descriptive comments), visually selects them, and invokes the plugin. The selection is sent to the active AI CLI (Claude Code, opencode, gemini, codex, or antigravity) and streamed into a **fill-preview chat split**. `<CR>` applies in-scope code, then any out-of-scope changes (imports, types, other files) are reviewed one at a time.
 
 **Philosophy:** the user is the architect. AI fills boilerplate within user-defined boundaries; it never makes architectural decisions.
 
@@ -38,8 +38,8 @@ lua/novibe/
   learn.lua    — #teach capture (.no_vibe/diffs.json) + distillation into learned-*.md
   promote.lua  — :NovibePromote — graduate mature rules (n≥3) into convention files
   consult.lua  — singleton interactive consult: seeds file/line/selection/conventions
-  providers/   — claude.lua, opencode.lua, gemini.lua, codex.lua: find_bin, build_cmd,
-                 parse_output, parse_chunk, streaming
+  providers/   — claude.lua, opencode.lua, gemini.lua, codex.lua, antigravity.lua: find_bin,
+                 build_cmd, parse_output, parse_chunk, streaming
 plugin/novibe.lua — guard + user commands
 ```
 
@@ -132,12 +132,22 @@ No `--continue` (use `--session-id` with the prev response's UUID). No effort/va
 ```
 Non-streaming: all JSONL events arrive at once. `parse_output` finds the `item.completed` event with `item.type=="agent_message"` for the response text; `thread.started` carries the `thread_id` used as `session_id`. System prompt is injected via `-c instructions="..."` (TOML-escaped). Codex is instructed not to run shell commands so it responds immediately with JSON.
 
+**antigravity** (`provider = "antigravity"`):
+```lua
+-- fresh session:
+{ agy_bin, "--print", prompt }
+-- resume (session_id sentinel "__continue__" signals prior exchange exists):
+{ agy_bin, "--continue", "--print", prompt }
+```
+Non-streaming: stdout is the raw AI response text (no JSON wrapper). `parse_output` parses it directly as JSON. No `--model`, `--effort`, `--bare`, or system-prompt flags. System prompt is prepended to the user prompt inside `<instructions>` tags (no CLI injection). Session continuity uses `--continue` (resumes the most recent conversation for the cwd); `parse_output` always returns `session_id = "__continue__"` as a sentinel to trigger `--continue` on subsequent calls.
+
 **`:NovibeConsult` (TUI mode):**
 ```lua
 { claude_bin,   "--append-system-prompt", seed }  -- + optional --model / --effort
 { opencode_bin }                                   -- no seed flag; use NovibeConsultPrompt
 { gemini_bin,   "--prompt-interactive",   seed }  -- + optional --model
 { codex_bin,    seed }                             -- seed as initial prompt positional arg
+{ agy_bin,      "--prompt-interactive",   seed }  -- no --model flag
 ```
 
 ## Profiles
@@ -151,20 +161,23 @@ require("novibe").setup({
     { label = "Claude Fast",  provider = "claude",   model = "claude-haiku-4-5-20251001",   effort = "low"  },
     { label = "OC DeepSeek",  provider = "opencode", model = "opencode-go/deepseek-v4-pro", effort = "high" },
     { label = "Gemini Flash", provider = "gemini",   model = "gemini-2.0-flash"                             },
-    { label = "Codex o4",     provider = "codex",    model = "o4-mini"                                      },
+    { label = "Codex o4",     provider = "codex",       model = "o4-mini"                                      },
+    { label = "Antigravity",  provider = "antigravity"                                                          },
   }
 })
 ```
 
-- `provider`: `"claude"` (default) | `"opencode"` | `"gemini"` | `"codex"`
+- `provider`: `"claude"` (default) | `"opencode"` | `"gemini"` | `"codex"` | `"antigravity"`
 - `effort` (claude): `low`/`medium`/`high`/`xhigh`/`max` → `--effort`
 - `effort` (opencode): maps to `--variant` (values depend on model)
 - `effort` (codex): maps to `-c model_reasoning_effort=<value>`; `max` → `xhigh`; values: `minimal|low|medium|high|xhigh`
 - `effort` (gemini): ignored (no CLI flag equivalent)
+- `effort` (antigravity): ignored (no CLI flag equivalent)
 - `model` (claude): full ID (`claude-sonnet-4-6`) or alias (`sonnet`, `opus`)
 - `model` (opencode): `"provider/model"` (run `opencode models`)
 - `model` (gemini): full ID (run `gemini`, check `/model` in TUI)
 - `model` (codex): model ID (e.g. `o4-mini`, `o3`); run `codex` and check available models
+- `model` (antigravity): ignored (no `--model` CLI flag; set model via `agy` settings)
 
 ## JSON Response Schema
 

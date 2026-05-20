@@ -131,6 +131,9 @@ function M.open(line1, line2, has_range)
     cmd = { bin }
     if profile and profile.model then vim.list_extend(cmd, { "--model", profile.model }) end
     vim.list_extend(cmd, { "--prompt-interactive", seed })
+  elseif provider_name == "antigravity" then
+    -- agy --prompt-interactive seeds context then stays in interactive TUI mode (no --model flag)
+    cmd = { bin, "--prompt-interactive", seed }
   elseif provider_name == "codex" then
     -- codex TUI accepts an optional initial prompt as a positional argument
     cmd = { bin }
