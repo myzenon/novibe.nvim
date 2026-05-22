@@ -226,6 +226,10 @@ function M.fill(line1, line2)
     if #parts > 0 then input_stats = table.concat(parts, " · ") end
   end
 
+  -- Preload no_vibe while the user types — stale_warning() makes blocking git calls.
+  local filename    = vim.api.nvim_buf_get_name(bufnr)
+  local no_vibe_txt = no_vibe.load(filename)
+
   input.open(function(user_prompt)
     if user_prompt == nil then return end
 
@@ -331,8 +335,6 @@ function M.fill(line1, line2)
       return
     end
 
-    local filename    = vim.api.nvim_buf_get_name(bufnr)
-    local no_vibe_txt = no_vibe.load(filename)
     local active_profile = config.options.active_profile
     local parts = {
       config.options.system_prompt,
