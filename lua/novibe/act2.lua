@@ -8,9 +8,9 @@ local providers = require("novibe.providers")
 
 local ns = vim.api.nvim_create_namespace("novibe_act2")
 
--- highlight groups (default = true so user colorscheme overrides win)
-vim.api.nvim_set_hl(0, "NovibeAct2Review", { link = "DiagnosticOk",   default = true })
-vim.api.nvim_set_hl(0, "NovibeAct2Teach",  { link = "DiagnosticWarn", default = true })
+-- highlight groups (default = true so user overrides win)
+vim.api.nvim_set_hl(0, "NovibeAct2Review", { bg = "#1a4731", fg = "#d1fae5", default = true })
+vim.api.nvim_set_hl(0, "NovibeAct2Teach",  { bg = "#431407", fg = "#fed7aa", default = true })
 
 -- Per-buffer state: [bufnr] = { token, top_id, bot_id, mode, ... }
 -- mode: "review" | "accepted" | "teach"
