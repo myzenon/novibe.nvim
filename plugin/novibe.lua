@@ -23,9 +23,9 @@ vim.api.nvim_create_user_command("NovibeAct2", function(opts)
   require("novibe.act2").fill(opts.line1, opts.line2)
 end, { range = true, desc = "novibe: act2 — fill in-place with virt_line review controls, no chat window" })
 
-vim.api.nvim_create_user_command("NovibeGen", function()
-  require("novibe.gen").open()
-end, { desc = "novibe: generate new files — prompt if empty, list if pending" })
+vim.api.nvim_create_user_command("NovibeGen", function(opts)
+  require("novibe.gen").open(opts.line1, opts.line2, opts.range > 0)
+end, { range = true, desc = "novibe: generate new files — prompt if empty, list if pending" })
 
 vim.api.nvim_create_user_command("NovibeDistill", function()
   local novibe = require("novibe")

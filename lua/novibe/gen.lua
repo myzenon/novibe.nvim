@@ -71,7 +71,13 @@ local function do_reprompt(buf, entry)
     local root        = project_root()
     local no_vibe_txt = no_vibe.load("")
     local novibe      = require("novibe")
-    local prompt      = novibe._build_gen_prompt(new_prompt, root, no_vibe_txt, "", "")
+    local ctx         = entry.ctx or {}
+    local prompt      = novibe._build_gen_prompt(
+      new_prompt, root, no_vibe_txt,
+      ctx.buf_name or "", ctx.selection or "")
+    if ctx.diag_txt and ctx.diag_txt ~= "" then
+      prompt = prompt .. "\n" .. ctx.diag_txt
+    end
 
     local cmd = provider.build_cmd(bin, prompt, {
       profile      = profile,
@@ -202,7 +208,9 @@ end
 
 -- ─── generation ───────────────────────────────────────────────────────────────
 
-local function run_gen(description)
+-- ctx: { buf_name, selection, diag_txt } — all optional
+local function run_gen(description, ctx)
+  ctx = ctx or {}
   local profile  = config.options.active_profile
   local provider = providers.get(profile and profile.provider)
   local bin      = provider.find_bin()
@@ -213,9 +221,13 @@ local function run_gen(description)
 
   local root        = project_root()
   local no_vibe_txt = no_vibe.load("")
-  local buf_name    = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ":.")
   local novibe      = require("novibe")
-  local prompt      = novibe._build_gen_prompt(description, root, no_vibe_txt, buf_name, "")
+  local prompt      = novibe._build_gen_prompt(
+    description, root, no_vibe_txt,
+    ctx.buf_name or "", ctx.selection or "")
+  if ctx.diag_txt and ctx.diag_txt ~= "" then
+    prompt = prompt .. "\n" .. ctx.diag_txt
+  end
 
   vim.notify("novibe gen: generating…", vim.log.levels.INFO)
 
@@ -258,6 +270,7 @@ local function run_gen(description)
           path    = ch.file,
           content = ch.replace,
           prompt  = description,
+          ctx     = ctx,
           bufnr   = nil,
         })
       end
@@ -278,14 +291,30 @@ end
 
 -- ─── entry point ──────────────────────────────────────────────────────────────
 
-function M.open()
+-- line1, line2: from command range (1-indexed); has_range: range > 0
+function M.open(line1, line2, has_range)
   if #_pending > 0 then
     open_list()
     return
   end
+
+  local bufnr    = vim.api.nvim_get_current_buf()
+  local filename = vim.api.nvim_buf_get_name(bufnr)
+  local buf_name = vim.fn.fnamemodify(filename, ":.")
+
+  -- capture visual selection or current line as reference context
+  local sl = (has_range and line1) or vim.api.nvim_win_get_cursor(0)[1]
+  local el = (has_range and line2) or sl
+  local sel_lines = vim.api.nvim_buf_get_lines(bufnr, sl - 1, el, false)
+  local selection = table.concat(sel_lines, "\n")
+
+  local diag_txt = require("novibe.diag").format(bufnr, sl, el)
+
+  local ctx = { buf_name = buf_name, selection = selection, diag_txt = diag_txt }
+
   input.open(function(description)
     if not description or description == "" then return end
-    run_gen(description)
+    run_gen(description, ctx)
   end)
 end
 
