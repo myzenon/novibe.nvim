@@ -29,7 +29,7 @@ You design the structure. You write the skeleton — function signature, comment
 {
   "myzenon/novibe.nvim",
   dependencies = { "folke/snacks.nvim" },
-  cmd = { "NovibeAct", "NovibeAct2", "NovibeConsult", "NovibeConsultPrompt", "NovibeProfile", "NovibeDistill", "NovibePromote", "NovibeReset", "NovibeStatus", "NovibeKB", "NovibeActReviewFocus" },
+  cmd = { "NovibeAct", "NovibeAct2", "NovibeGen", "NovibeConsult", "NovibeConsultPrompt", "NovibeProfile", "NovibeDistill", "NovibePromote", "NovibeReset", "NovibeStatus", "NovibeKB", "NovibeActReviewFocus" },
   keys = {
     { "<leader>aa", ":NovibeAct<CR>", mode = "v", desc = "novibe: fill implementation" },
     { "<leader>aa", ":NovibeAct<CR>", mode = "n", desc = "novibe: act on current line" },
@@ -134,16 +134,30 @@ All keys pass through to native vim when the cursor is outside the scope. Remap 
 
 ### Generate new files
 
-Run `:NovibeAct` from anywhere, type `#gen <description>`:
+Run `:NovibeGen` to generate one or more new files from a description:
 
 ```
-#gen create a React UserProfile component with name/avatar props using shadcn Card
-#gen create a db repository for the User model
+create a React UserProfile component with name/avatar props using shadcn Card
+create a db repository for the User model
 ```
 
-If you have a file open or a block selected, novibe injects it as reference context — so `#gen create the repository for this service` while viewing `auth.service.ts` gives the AI the full picture of what to mirror.
+If you have a file open, novibe injects it as reference context automatically.
 
-AI proposes each file as a separate queue entry — same `<CR>`/`s`/`:w` review flow. It can create new files, edit existing ones, or delete files that are no longer needed — all proposed as changes you confirm individually.
+**Pending list:** `:NovibeGen` shows an input prompt when there are no pending files, or a picker of pending files when there are. Finish (save or wipe) the current batch before starting a new one.
+
+Each proposed file opens as a regular buffer with a winbar showing the save path and available actions:
+
+```
+  novibe  src/components/UserProfile.tsx  ·  <C-f> change path  ·  <leader>r re-prompt  ·  :w save
+```
+
+| Key | Action |
+|---|---|
+| `<C-f>` | Edit the save path (input float pre-filled with current path) |
+| `<leader>r` | Re-prompt — regenerate the file with a revised description |
+| `:w` | Save the file to the path shown in the winbar |
+
+No auto-apply — you save each file yourself, so hallucinated paths never silently write to the wrong location.
 
 ---
 
@@ -151,8 +165,9 @@ AI proposes each file as a separate queue entry — same `<CR>`/`s`/`:w` review 
 
 | Command              | What                                                         |
 | -------------------- | ------------------------------------------------------------ |
-| `:NovibeAct`         | Fill selection (or current line) · `#gen <desc>` to generate new files · `#teach <reason>` to capture style evidence |
+| `:NovibeAct`         | Fill selection (or current line) · `#teach <reason>` to capture style evidence |
 | `:NovibeAct2`        | Fill in-place with virt_line review controls — no chat window. `<CR>` accept · `U` undo · `<leader>r` re-prompt · `<leader>t` teach |
+| `:NovibeGen`         | Generate new files — prompt if no pending files, list if pending. `<C-f>` change path · `<leader>r` re-prompt · `:w` save |
 | `:NovibeConsult`     | Open interactive consult session (vsplit); claude / gemini / codex: context auto-injected; opencode: manual |
 | `:NovibeConsultPrompt` | Push consult seed into the active consult terminal (required for opencode; works with any provider) |
 | `:NovibeProfile`     | Two-step picker: choose slot (Act / Consult), then profile   |

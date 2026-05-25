@@ -25,6 +25,8 @@ CLAUDE.md stays current via the dev loop; the others need explicit checking when
 lua/novibe/
   init.lua     — entry: selection capture, prompt assembly, vim.system, streams to chat
   act2.lua     — :NovibeAct2: in-place fill with virt_line review controls (no chat window)
+  gen.lua      — :NovibeGen: generate new files; pending list (one batch at a time);
+                 each file opens as a real buffer with winbar + <C-f>/<leader>r/:w
   config.lua   — defaults: bare, system_prompt, profiles, learn.auto_extract_after, act2.keys
   input.lua    — floating input window (:w submits, <Esc> cancels; opts.initial pre-fills)
   chat.lua     — fill-preview split (M.open_fill) + legacy follow-up float (M.open);
@@ -145,7 +147,7 @@ Act2 always passes `use_continue = false`. Each fill is a fresh session — no `
 - `:NovibeAct` — act on current line or range. Input float accepts:
   - free-form instruction → fill/modify the selection
   - `#teach <reason>` → accumulate evidence (diff if editing a recent fill, else note)
-  - `#gen <description>` → project-level generation; AI proposes new files via `changes[action=create]`, reviewed file-by-file in the question queue
+- `:NovibeGen` — generate new files from a description. Empty pending → input prompt → AI generates → populate pending list. Non-empty pending → show picker (one batch at a time). Each file opens as a real listed buffer named with the proposed path; winbar shows path + keys. `<C-f>` opens input float pre-filled with current path to change it. `<leader>r` re-prompts pre-filled with last description. `:w` saves to the path in the buffer name. `BufWritePost`/`BufWipeout` remove entry from pending. No `apply.lua` — user saves manually. Single proposed file → opens directly; multiple → picker first.
 - `:NovibeAct2` — alternative no-chat-window fill. AI code is written directly into the buffer; virt_lines above/below the scope show review controls (`<CR>` accept, `U` undo, `<leader>r` re-prompt, `<leader>t` teach). Keys are cursor-guarded (only fire when cursor is inside scope). Out-of-scope changes shown in a non-focused bottom scratch window. Two-phase `<leader>t` teach: first press accepts + enters edit mode, second press captures the diff and opens a reason float. Session is always fresh (no `--continue`). All keys configurable via `setup({ act2 = { keys = {...} } })`.
 - `:NovibeConsult` — singleton interactive session in a vsplit. Process dies with buffer; `<Esc><Esc>` exits terminal mode; range injects selection. Seed = file, line, current commit hash, matched `.no_vibe` sections, snapshot instructions. Injected via `--append-system-prompt` (claude) or `--prompt-interactive` (gemini). AI may freely edit `CLAUDE.md` and `.no_vibe/*.md`; all other files off-limits. Say **"snapshot"** mid-session to persist discoveries. **opencode workaround:** no flag exists, so use `:NovibeConsultPrompt` after opening — the seed is `chansend`-ed into the input box; press Enter to submit.
 - `:NovibeConsultPrompt` — build the consult seed from current buffer/selection and chansend it into the active consult terminal. Required for opencode; optional refresh for claude/gemini/codex. Invoke from the source buffer, not the consult terminal.
