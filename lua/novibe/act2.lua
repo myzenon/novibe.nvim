@@ -9,8 +9,10 @@ local providers = require("novibe.providers")
 local ns = vim.api.nvim_create_namespace("novibe_act2")
 
 -- highlight groups (default = true so user overrides win)
-vim.api.nvim_set_hl(0, "NovibeAct2Review", { bg = "#1a4731", fg = "#d1fae5", default = true })
-vim.api.nvim_set_hl(0, "NovibeAct2Teach",  { bg = "#431407", fg = "#fed7aa", default = true })
+vim.api.nvim_set_hl(0, "NovibeAct2Review",     { bg = "#1a4731", fg = "#d1fae5", default = true })
+vim.api.nvim_set_hl(0, "NovibeAct2Teach",      { bg = "#431407", fg = "#fed7aa", default = true })
+vim.api.nvim_set_hl(0, "NovibeAct2ChangeOdd",  { bg = "#1c2c3c", default = true })
+vim.api.nvim_set_hl(0, "NovibeAct2ChangeEven", { bg = "#1c3c2c", default = true })
 
 -- Per-buffer state: [bufnr] = { token, top_id, bot_id, mode, ... }
 -- mode: "review" | "accepted" | "teach"
@@ -86,9 +88,10 @@ end
 local function show_changes(changes)
   if not changes or #changes == 0 then return nil, nil end
 
-  local lines = { "# Out-of-scope changes — apply manually", "" }
+  local lines        = { "# Out-of-scope changes — apply manually", "" }
+  local block_ranges = {}  -- { {s, e} } 0-indexed line ranges per change
+
   for i, ch in ipairs(changes) do
-    -- infer code fence language from target filename
     local lang = ""
     if ch.file and ch.file ~= "" then
       local ok, ft = pcall(vim.filetype.match, { filename = ch.file })
@@ -97,53 +100,65 @@ local function show_changes(changes)
       end
     end
 
+    local bs = #lines  -- 0-indexed block start
+
     table.insert(lines, string.format("## [%d] %s", i, ch.file or "?"))
     if ch.description and ch.description ~= "" then
       table.insert(lines, ch.description)
     end
-    table.insert(lines, "")
     if ch.action and ch.action ~= "" then
-      table.insert(lines, "action: **" .. ch.action .. "**")
       table.insert(lines, "")
+      table.insert(lines, "action: **" .. ch.action .. "**")
     end
     if ch.find and ch.find ~= "" then
+      table.insert(lines, "")
       table.insert(lines, "find:")
       table.insert(lines, "```" .. lang)
       for _, l in ipairs(vim.split(ch.find, "\n", { plain = true })) do
         table.insert(lines, l)
       end
       table.insert(lines, "```")
-      table.insert(lines, "")
     end
     if ch.replace and ch.replace ~= "" then
+      table.insert(lines, "")
       table.insert(lines, "replace:")
       table.insert(lines, "```" .. lang)
       for _, l in ipairs(vim.split(ch.replace, "\n", { plain = true })) do
         table.insert(lines, l)
       end
       table.insert(lines, "```")
-      table.insert(lines, "")
     end
+
+    block_ranges[i] = { s = bs, e = #lines - 1 }  -- 0-indexed inclusive
+    table.insert(lines, "")  -- separator between blocks (not highlighted)
   end
 
   local sbuf = vim.api.nvim_create_buf(false, true)
   vim.bo[sbuf].buftype   = "nofile"
   vim.bo[sbuf].bufhidden = "wipe"
   vim.api.nvim_buf_set_lines(sbuf, 0, -1, false, lines)
-  vim.bo[sbuf].filetype   = "markdown"
+  vim.bo[sbuf].filetype  = "markdown"
   vim.bo[sbuf].modifiable = false
   pcall(vim.treesitter.start, sbuf, "markdown")
+
+  -- alternating background per change block; priority < treesitter (100) so
+  -- syntax foreground colors show through
+  local hl_ns = vim.api.nvim_create_namespace("novibe_act2_changes")
+  for i, r in ipairs(block_ranges) do
+    local hl = (i % 2 == 1) and "NovibeAct2ChangeOdd" or "NovibeAct2ChangeEven"
+    for ln = r.s, r.e do
+      vim.api.nvim_buf_set_extmark(sbuf, hl_ns, ln, 0, { line_hl_group = hl, priority = 50 })
+    end
+  end
 
   local cur_win = vim.api.nvim_get_current_win()
   vim.cmd("botright 15split")
   local swin = vim.api.nvim_get_current_win()
   vim.api.nvim_win_set_buf(swin, sbuf)
-  vim.wo[swin].number         = false
-  vim.wo[swin].relativenumber = false
-  vim.wo[swin].wrap           = false
-  vim.wo[swin].signcolumn     = "no"
-  vim.wo[swin].conceallevel   = 0
-  vim.wo[swin].statusline     = "  novibe  out-of-scope changes · q close"
+  vim.wo[swin].wrap         = false
+  vim.wo[swin].signcolumn   = "no"
+  vim.wo[swin].conceallevel = 0
+  vim.wo[swin].statusline   = "  novibe  out-of-scope changes · q close"
   vim.keymap.set("n", "q", function()
     if vim.api.nvim_win_is_valid(swin) then
       vim.api.nvim_win_close(swin, true)
