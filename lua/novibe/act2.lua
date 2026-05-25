@@ -86,41 +86,63 @@ end
 local function show_changes(changes)
   if not changes or #changes == 0 then return nil, nil end
 
-  local lines = { "  Out-of-scope changes (apply manually)  ", "" }
+  local lines = { "# Out-of-scope changes — apply manually", "" }
   for i, ch in ipairs(changes) do
-    table.insert(lines, string.format("[%d] %s — %s", i, ch.file or "?", ch.description or ""))
-    if ch.action then
-      table.insert(lines, "    action: " .. ch.action)
-    end
-    if ch.find and ch.find ~= "" then
-      table.insert(lines, "    find:")
-      for _, l in ipairs(vim.split(ch.find, "\n", { plain = true })) do
-        table.insert(lines, "      " .. l)
+    -- infer code fence language from target filename
+    local lang = ""
+    if ch.file and ch.file ~= "" then
+      local ok, ft = pcall(vim.filetype.match, { filename = ch.file })
+      if ok and ft and ft ~= "" then
+        lang = (vim.treesitter.language.get_lang and vim.treesitter.language.get_lang(ft)) or ft
       end
     end
-    if ch.replace and ch.replace ~= "" then
-      table.insert(lines, "    replace:")
-      for _, l in ipairs(vim.split(ch.replace, "\n", { plain = true })) do
-        table.insert(lines, "      " .. l)
-      end
+
+    table.insert(lines, string.format("## [%d] %s", i, ch.file or "?"))
+    if ch.description and ch.description ~= "" then
+      table.insert(lines, ch.description)
     end
     table.insert(lines, "")
+    if ch.action and ch.action ~= "" then
+      table.insert(lines, "action: **" .. ch.action .. "**")
+      table.insert(lines, "")
+    end
+    if ch.find and ch.find ~= "" then
+      table.insert(lines, "find:")
+      table.insert(lines, "```" .. lang)
+      for _, l in ipairs(vim.split(ch.find, "\n", { plain = true })) do
+        table.insert(lines, l)
+      end
+      table.insert(lines, "```")
+      table.insert(lines, "")
+    end
+    if ch.replace and ch.replace ~= "" then
+      table.insert(lines, "replace:")
+      table.insert(lines, "```" .. lang)
+      for _, l in ipairs(vim.split(ch.replace, "\n", { plain = true })) do
+        table.insert(lines, l)
+      end
+      table.insert(lines, "```")
+      table.insert(lines, "")
+    end
   end
 
   local sbuf = vim.api.nvim_create_buf(false, true)
   vim.bo[sbuf].buftype   = "nofile"
   vim.bo[sbuf].bufhidden = "wipe"
   vim.api.nvim_buf_set_lines(sbuf, 0, -1, false, lines)
+  vim.bo[sbuf].filetype   = "markdown"
   vim.bo[sbuf].modifiable = false
+  pcall(vim.treesitter.start, sbuf, "markdown")
 
   local cur_win = vim.api.nvim_get_current_win()
-  vim.cmd("botright 12split")
+  vim.cmd("botright 15split")
   local swin = vim.api.nvim_get_current_win()
   vim.api.nvim_win_set_buf(swin, sbuf)
   vim.wo[swin].number         = false
   vim.wo[swin].relativenumber = false
   vim.wo[swin].wrap           = false
   vim.wo[swin].signcolumn     = "no"
+  vim.wo[swin].conceallevel   = 0
   vim.wo[swin].statusline     = "  novibe  out-of-scope changes · q close"
   vim.keymap.set("n", "q", function()
     if vim.api.nvim_win_is_valid(swin) then
