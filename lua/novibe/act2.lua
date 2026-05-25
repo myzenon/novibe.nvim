@@ -8,6 +8,10 @@ local providers = require("novibe.providers")
 
 local ns = vim.api.nvim_create_namespace("novibe_act2")
 
+-- highlight groups (default = true so user colorscheme overrides win)
+vim.api.nvim_set_hl(0, "NovibeAct2Review", { link = "DiagnosticOk",   default = true })
+vim.api.nvim_set_hl(0, "NovibeAct2Teach",  { link = "DiagnosticWarn", default = true })
+
 -- Per-buffer state: [bufnr] = { token, top_id, bot_id, mode, ... }
 -- mode: "review" | "accepted" | "teach"
 local _states = {}
@@ -60,20 +64,20 @@ end
 
 -- ─── virt_lines content ───────────────────────────────────────────────────────
 
-local function vl(text) return { { { text, "Comment" } } } end
+local function vl(text, hl) return { { { text, hl or "Comment" } } } end
 
 local function review_vl(keys)
   local cr = keys.accept   or "<CR>"
   local uu = keys.undo     or "U"
   local rr = keys.reprompt or "<leader>r"
   local tt = keys.teach    or "<leader>t"
-  return vl("  " .. cr .. " accept  ·  " .. uu .. " undo  ·  " .. rr .. " re-prompt  ·  " .. tt .. " teach")
+  return vl("  " .. cr .. " accept  ·  " .. uu .. " undo  ·  " .. rr .. " re-prompt  ·  " .. tt .. " teach", "NovibeAct2Review")
 end
 
 local function teach_vl(keys)
   local tt = keys.teach or "<leader>t"
   local uu = keys.undo  or "U"
-  return vl("  edit in scope  ·  " .. tt .. " done  ·  " .. uu .. " cancel")
+  return vl("  edit in scope  ·  " .. tt .. " done  ·  " .. uu .. " cancel", "NovibeAct2Teach")
 end
 
 
