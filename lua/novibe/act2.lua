@@ -157,20 +157,11 @@ end
 
 -- ─── actions ──────────────────────────────────────────────────────────────────
 
--- Splice AI code into the buffer and open out-of-scope scratch (non-focused).
-local function do_accept(bufnr, s)
-  local sl, el = get_scope(bufnr, s)
-  if not sl then clear_state(bufnr); return end
-  local code_lines = vim.split(s.ai_code, "\n", { plain = true })
-  local ok = pcall(vim.api.nvim_buf_set_lines, bufnr, sl - 1, el, false, code_lines)
-  if not ok then
-    vim.notify("novibe act2: buffer is not modifiable", vim.log.levels.ERROR)
-    clear_state(bufnr)
-    return
-  end
-  s.teach_original = s.ai_code
-  s.mode = "accepted"
-  if s.response.changes and #s.response.changes > 0 then
+-- <CR>: code is already in buffer — confirm by showing out-of-scope scratch and
+-- shrinking virt to just the teach key.
+local function do_confirm(bufnr, s)
+  s.mode = "confirmed"
+  if #s.response.changes > 0 then
     s.scratch_win, s.scratch_buf = show_changes(s.response.changes)
   end
   local keys = get_keys()
@@ -178,33 +169,38 @@ local function do_accept(bufnr, s)
 end
 
 local function enter_teach(bufnr, s)
+  s.teach_from = s.mode  -- remember where we came from so U can restore it
   s.mode = "teach"
   local keys = get_keys()
   set_virt(bufnr, s, teach_vl(keys), teach_vl(keys))
 end
 
--- Second t press: open reason float, compute diff, call learn.teach.
+-- Second <leader>t press: open reason float, compute diff, call learn.teach.
 local function do_teach_done(bufnr, s)
   local sl, el = get_scope(bufnr, s)
   if not sl then clear_state(bufnr); return end
 
   local current_lines = vim.api.nvim_buf_get_lines(bufnr, sl - 1, el, false)
-  local current  = table.concat(current_lines, "\n")
-  local original = s.teach_original
-  local filename  = vim.api.nvim_buf_get_name(bufnr)
-  local profile   = config.options.active_profile
-  local provider  = providers.get(profile and profile.provider)
-  local bin       = provider.find_bin()
+  local current    = table.concat(current_lines, "\n")
+  local original   = s.teach_original
+  local filename   = vim.api.nvim_buf_get_name(bufnr)
+  local profile    = config.options.active_profile
+  local provider   = providers.get(profile and profile.provider)
+  local bin        = provider.find_bin()
   local auto_after = config.options.learn and config.options.learn.auto_extract_after
 
-  -- revert virt to accepted while reason float is open
-  s.mode = "accepted"
+  -- revert virt while reason float is open
   local keys = get_keys()
-  set_virt(bufnr, s, accepted_vl(keys), accepted_vl(keys))
+  s.mode = s.teach_from or "confirmed"
+  if s.mode == "review" then
+    set_virt(bufnr, s, review_vl(keys), review_vl(keys))
+  else
+    set_virt(bufnr, s, accepted_vl(keys), accepted_vl(keys))
+  end
 
   input.open(function(reason)
     if not reason or reason == "" then
-      -- user cancelled reason: re-enter teach mode so they can try again
+      -- user cancelled: re-enter teach mode so they can try again
       if _states[bufnr] then enter_teach(bufnr, s) end
       return
     end
@@ -228,29 +224,33 @@ end
 -- ─── keymaps ──────────────────────────────────────────────────────────────────
 
 local function setup_keymaps(bufnr, s)
-  local keys       = get_keys()
-  local accept_key = keys.accept   or "<CR>"
-  local undo_key   = keys.undo     or "U"
+  local keys         = get_keys()
+  local accept_key   = keys.accept   or "<CR>"
+  local undo_key     = keys.undo     or "U"
   local reprompt_key = keys.reprompt or "<leader>r"
-  local teach_key  = keys.teach    or "<leader>t"
-  local bopts      = { buffer = bufnr, nowait = true }
+  local teach_key    = keys.teach    or "<leader>t"
+  local bopts        = { buffer = bufnr, nowait = true }
 
+  -- <CR>: confirm — show out-of-scope scratch, shrink virt to teach key only
   vim.keymap.set("n", accept_key, function()
     if not cursor_in_scope(bufnr, s) then feedkeys(accept_key); return end
-    if s.mode ~= "review" then feedkeys(accept_key); return end
-    do_accept(bufnr, s)
+    if s.mode == "review" then do_confirm(bufnr, s)
+    else feedkeys(accept_key) end
   end, bopts)
 
+  -- U: undo AI code (restore original) or cancel teach
   vim.keymap.set("n", undo_key, function()
     if not cursor_in_scope(bufnr, s) then feedkeys(undo_key); return end
     if s.mode == "teach" then
-      -- cancel teach: go back to accepted state
-      s.mode = "accepted"
-      set_virt(bufnr, s, accepted_vl(keys), accepted_vl(keys))
-    elseif s.mode == "review" then
-      -- nothing was spliced yet — just dismiss
-      clear_state(bufnr)
-    else  -- accepted
+      -- cancel teach: return to where we came from
+      s.mode = s.teach_from or "confirmed"
+      if s.mode == "review" then
+        set_virt(bufnr, s, review_vl(keys), review_vl(keys))
+      else
+        set_virt(bufnr, s, accepted_vl(keys), accepted_vl(keys))
+      end
+    else
+      -- restore original lines and dismiss
       local sl, el = get_scope(bufnr, s)
       if sl then
         pcall(vim.api.nvim_buf_set_lines, bufnr, sl - 1, el, false, s.original_lines)
@@ -259,21 +259,24 @@ local function setup_keymaps(bufnr, s)
     end
   end, bopts)
 
+  -- <leader>r: restore original lines and re-open input float pre-filled
   vim.keymap.set("n", reprompt_key, function()
     if not cursor_in_scope(bufnr, s) then feedkeys(reprompt_key); return end
-    if s.mode ~= "review" then feedkeys(reprompt_key); return end
+    if s.mode == "teach" then feedkeys(reprompt_key); return end
     local sl, el = get_scope(bufnr, s)
+    local orig_el   = s.orig_end_line
     local last_prompt = s.last_prompt
+    if sl then
+      pcall(vim.api.nvim_buf_set_lines, bufnr, sl - 1, el, false, s.original_lines)
+    end
     clear_state(bufnr)
-    M.fill(sl, el, bufnr, last_prompt)
+    M.fill(sl, orig_el, bufnr, last_prompt)
   end, bopts)
 
+  -- <leader>t: enter teach mode (phase 1) or capture diff+reason (phase 2)
   vim.keymap.set("n", teach_key, function()
     if not cursor_in_scope(bufnr, s) then feedkeys(teach_key); return end
-    if s.mode == "review" then
-      do_accept(bufnr, s)
-      enter_teach(bufnr, s)  -- overrides accepted_vl set by do_accept
-    elseif s.mode == "accepted" then
+    if s.mode == "review" or s.mode == "confirmed" then
       enter_teach(bufnr, s)
     elseif s.mode == "teach" then
       do_teach_done(bufnr, s)
@@ -445,16 +448,24 @@ function M.fill(line1, line2, bufnr_arg, initial_prompt)
         vim.notify("novibe: " .. response.message, vim.log.levels.INFO)
       end
 
-      -- Create anchor extmarks AFTER spinner is cleared (new extmarks = new IDs).
-      -- Bot extmark gravity: after buf_set_lines on [sl-1, el), the bot mark at el-1
-      -- tracks to the last line of the replacement — giving us the correct post-splice scope.
+      -- Splice AI code into buffer immediately so the user sees it.
+      local code_lines = vim.split(ai_code, "\n", { plain = true })
+      local ok = pcall(vim.api.nvim_buf_set_lines, bufnr, start_line - 1, end_line, false, code_lines)
+      if not ok then
+        vim.notify("novibe act2: buffer is not modifiable", vim.log.levels.ERROR)
+        _states[bufnr] = nil
+        return
+      end
+
+      -- Extmarks anchor above and below the newly written code.
       local top_id = vim.api.nvim_buf_set_extmark(bufnr, ns, start_line - 1, 0, {})
-      local bot_id = vim.api.nvim_buf_set_extmark(bufnr, ns, end_line - 1, 0, {})
+      local bot_id = vim.api.nvim_buf_set_extmark(bufnr, ns, start_line - 1 + #code_lines - 1, 0, {})
 
       local s = {
         token          = token,
         start_line     = start_line,
-        end_line       = end_line,
+        end_line       = start_line - 1 + #code_lines,
+        orig_end_line  = end_line,   -- original selection end for reprompt
         original_lines = original_lines,
         response       = response,
         ai_code        = ai_code,
@@ -462,7 +473,7 @@ function M.fill(line1, line2, bufnr_arg, initial_prompt)
         top_id         = top_id,
         bot_id         = bot_id,
         mode           = "review",
-        teach_original = nil,
+        teach_original = ai_code,
         scratch_win    = nil,
         scratch_buf    = nil,
         augroup        = nil,
