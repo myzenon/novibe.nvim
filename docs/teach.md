@@ -59,6 +59,21 @@ No diff here — the selection itself is the evidence. Distillation treats it as
 - You notice existing code following a pattern worth formalizing
 - The fill was correct but you want to reinforce the pattern anyway
 
+### From Act2 — integrated teach with `t`
+
+`:NovibeAct2` builds teach directly into the review flow. No re-selection, no `#teach` prefix:
+
+1. Run `:NovibeAct2` on a skeleton → AI code appears in-buffer with virt_line review controls
+2. Press `<leader>t` (default) — code is accepted and edit mode activates. Virt_lines change to: `edit in scope · <leader>t done · U cancel`
+3. Edit the AI code in-place — swap a loop style, rename, simplify
+4. Press `<leader>t` again — a reason float opens
+5. Type your reason (plain text, no `#teach`) → `:w` to submit
+6. novibe computes the diff between the AI's original output and your edited version, then saves it
+
+**If you press `t` twice without editing**, the code is saved as a note-mode entry (no diff, reason only) — same as Note mode in `:NovibeAct`.
+
+The out-of-scope scratch window stays open during teach so you can see what imports/types still need manual updates.
+
 ### From the chat — capture feedback as a rule
 
 `#teach <reason>` also works inside the fill-preview chat. Type it after the marker and `:w` — the reason is captured as a note-mode teach entry; no AI call, no change to the current question:

@@ -29,7 +29,7 @@ You design the structure. You write the skeleton — function signature, comment
 {
   "myzenon/novibe.nvim",
   dependencies = { "folke/snacks.nvim" },
-  cmd = { "NovibeAct", "NovibeConsult", "NovibeConsultPrompt", "NovibeProfile", "NovibeDistill", "NovibePromote", "NovibeReset", "NovibeStatus", "NovibeKB", "NovibeActReviewFocus" },
+  cmd = { "NovibeAct", "NovibeAct2", "NovibeConsult", "NovibeConsultPrompt", "NovibeProfile", "NovibeDistill", "NovibePromote", "NovibeReset", "NovibeStatus", "NovibeKB", "NovibeActReviewFocus" },
   keys = {
     { "<leader>aa", ":NovibeAct<CR>", mode = "v", desc = "novibe: fill implementation" },
     { "<leader>aa", ":NovibeAct<CR>", mode = "n", desc = "novibe: act on current line" },
@@ -99,6 +99,39 @@ Hallucinated paths are flagged inline with `⚠` so you can revise or skip befor
 
 A virtual line appears below your selection in the working buffer once the review is ready — it clears automatically when the chat closes. Use `i`/`a` in the chat window to jump straight to the reply area regardless of where your cursor is. If you're in insert mode when the chat opens, `:NovibeActReviewFocus` jumps to it without leaving the keyboard.
 
+### Act2 — no chat window
+
+`:NovibeAct2` is an alternative fill approach that skips the chat window entirely. Instead of a side split, AI code is written directly into your buffer and review controls appear as virtual lines above and below the filled scope:
+
+```
+⠋  staying in scope…          ← spinner while AI runs
+  function myFn() {           ← your selection (unchanged)
+    // TODO
+  }
+⠏  staying in scope…
+
+→ when done:
+
+  <CR> accept  ·  U undo  ·  r re-prompt  ·  t teach
+  function myFn() {           ← original lines still in buffer
+    // TODO
+  }
+  <CR> accept  ·  U undo  ·  r re-prompt  ·  t teach
+```
+
+| Key | Scope | Action |
+|---|---|---|
+| `<CR>` | cursor in scope | Splice AI code into buffer; show out-of-scope changes in a non-focused bottom split |
+| `U` | cursor in scope | Undo: restore original lines (or cancel teach mode) |
+| `<leader>r` | cursor in scope | Re-prompt: restore original and reopen input float pre-filled |
+| `<leader>t` | cursor in scope | Phase 1: accept + enter edit mode (edit AI code freely); Phase 2: open reason float, capture diff, call teach |
+
+All keys pass through to native vim when the cursor is outside the scope. Remap any key that conflicts with your setup via `setup({ act2 = { keys = { teach = "<leader>t", ... } } })`.
+
+**Out-of-scope changes** (imports, types, other files) appear in a read-only bottom split — you apply them manually. Close with `q`.
+
+**Teach flow** (`t`): press `t` → code is accepted and you can edit it in-place → press `t` again → type your reason → diff (AI output vs your edit) is captured automatically. No re-selection, no `#teach` prefix needed.
+
 ### Generate new files
 
 Run `:NovibeAct` from anywhere, type `#gen <description>`:
@@ -119,6 +152,7 @@ AI proposes each file as a separate queue entry — same `<CR>`/`s`/`:w` review 
 | Command              | What                                                         |
 | -------------------- | ------------------------------------------------------------ |
 | `:NovibeAct`         | Fill selection (or current line) · `#gen <desc>` to generate new files · `#teach <reason>` to capture style evidence |
+| `:NovibeAct2`        | Fill in-place with virt_line review controls — no chat window. `<CR>` accept · `U` undo · `<leader>r` re-prompt · `<leader>t` teach |
 | `:NovibeConsult`     | Open interactive consult session (vsplit); claude / gemini / codex: context auto-injected; opencode: manual |
 | `:NovibeConsultPrompt` | Push consult seed into the active consult terminal (required for opencode; works with any provider) |
 | `:NovibeProfile`     | Two-step picker: choose slot (Act / Consult), then profile   |

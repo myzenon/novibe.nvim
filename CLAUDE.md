@@ -24,8 +24,9 @@ CLAUDE.md stays current via the dev loop; the others need explicit checking when
 ```
 lua/novibe/
   init.lua     — entry: selection capture, prompt assembly, vim.system, streams to chat
-  config.lua   — defaults: bare, system_prompt, profiles, learn.auto_extract_after
-  input.lua    — floating input window (:w submits, <Esc> cancels)
+  act2.lua     — :NovibeAct2: in-place fill with virt_line review controls (no chat window)
+  config.lua   — defaults: bare, system_prompt, profiles, learn.auto_extract_after, act2.keys
+  input.lua    — floating input window (:w submits, <Esc> cancels; opts.initial pre-fills)
   chat.lua     — fill-preview split (M.open_fill) + legacy follow-up float (M.open);
                  question queue, streamed code via push(), #teach interception
   stream.lua   — escape-aware extractor for the "code" JSON field from partial stdout
@@ -76,12 +77,76 @@ Visual select → input.lua float (:w submit)
 
 `M.open()` is still available for responses with only out-of-scope changes (no fillable code). Same `<CR>` / `:w discuss` / `q` semantics; `done:true` stays open until the user closes with `q`.
 
+## Act2 Flow
+
+`:NovibeAct2` is an alternative to `:NovibeAct` that avoids the chat window entirely. AI code is written directly into the buffer; a review bar appears as virt_lines above and below the scope.
+
+```
+Visual select → input.lua float (:w submit)
+  → same prompt assembly as Act1 (system_prompt + conventions + ctx + diagnostics)
+  → spinner virt_lines above/below selection while AI runs
+  → on completion: parse_output → { code, message, changes, done }
+  → if code is empty: vim.notify the message and exit
+  → extmark anchors placed at selection start/end (track line shifts after splicing)
+
+  Mode: "review"
+  → virt_lines show: <CR> accept · U undo · <leader>r re-prompt · <leader>t teach
+  → all keys are cursor-guarded: only fire when cursor is inside the scope
+     (out-of-scope → feedkeys passes through to native vim behavior)
+
+  <CR> accept:
+    → splice ai_code into buffer (buf_set_lines on current extmark positions)
+    → open out-of-scope scratch window (bottom split, non-focused) if changes[]
+    → virt_lines shrink to: t teach this
+    → Mode: "accepted"
+
+  U undo (in "review"):
+    → no splice happened — just clear extmarks and keymaps
+
+  U undo (in "accepted"):
+    → restore original_lines at current scope positions, clear state
+
+  r re-prompt:
+    → restore original_lines (no-op in review: nothing spliced yet)
+    → clear state, call M.fill(sl, el, bufnr, last_prompt) — input float re-opens pre-filled
+
+  t teach (two-phase):
+    Phase 1 — press t in "review" or "accepted" mode:
+      → if "review": also runs do_accept first (splice + show out-of-scope)
+      → virt_lines change to: edit in scope · t done · U cancel
+      → Mode: "teach"
+      → user edits the AI code in-place; out-of-scope scratch stays open for reference
+
+    U cancel (in "teach"):
+      → mode → "accepted", virt_lines revert to: t teach this
+      (user's edits stay; U only cancels teach intent, does not undo edits)
+
+    Phase 2 — press t again in "teach" mode:
+      → read current buffer lines in scope as `current`
+      → teach_original (ai_code at accept time) is `original`
+      → open input float (empty) for reason text
+      → on submit: learn.teach(original≠current ? original : nil, current, reason, …)
+      → clear state
+
+  queue exhausted or quit → extmarks and keymaps cleaned up
+  BufWipeout autocmd ensures cleanup even if buffer is force-closed
+```
+
+### Act2: session continuity
+
+Act2 always passes `use_continue = false`. Each fill is a fresh session — no `_session_id` is tracked or reused. Keeps Act2 fast and context-clean at the cost of session memory.
+
+### Act2: token guard
+
+`M.fill` captures `local token = {}` before `vim.system`. If the user triggers a second fill before the first AI response arrives, `clear_state` runs on the old state and the callback checks `_states[bufnr].token == token` before writing — stale callbacks are silently discarded.
+
 ## Commands
 
 - `:NovibeAct` — act on current line or range. Input float accepts:
   - free-form instruction → fill/modify the selection
   - `#teach <reason>` → accumulate evidence (diff if editing a recent fill, else note)
   - `#gen <description>` → project-level generation; AI proposes new files via `changes[action=create]`, reviewed file-by-file in the question queue
+- `:NovibeAct2` — alternative no-chat-window fill. AI code is written directly into the buffer; virt_lines above/below the scope show review controls (`<CR>` accept, `U` undo, `<leader>r` re-prompt, `<leader>t` teach). Keys are cursor-guarded (only fire when cursor is inside scope). Out-of-scope changes shown in a non-focused bottom scratch window. Two-phase `<leader>t` teach: first press accepts + enters edit mode, second press captures the diff and opens a reason float. Session is always fresh (no `--continue`). All keys configurable via `setup({ act2 = { keys = {...} } })`.
 - `:NovibeConsult` — singleton interactive session in a vsplit. Process dies with buffer; `<Esc><Esc>` exits terminal mode; range injects selection. Seed = file, line, current commit hash, matched `.no_vibe` sections, snapshot instructions. Injected via `--append-system-prompt` (claude) or `--prompt-interactive` (gemini). AI may freely edit `CLAUDE.md` and `.no_vibe/*.md`; all other files off-limits. Say **"snapshot"** mid-session to persist discoveries. **opencode workaround:** no flag exists, so use `:NovibeConsultPrompt` after opening — the seed is `chansend`-ed into the input box; press Enter to submit.
 - `:NovibeConsultPrompt` — build the consult seed from current buffer/selection and chansend it into the active consult terminal. Required for opencode; optional refresh for claude/gemini/codex. Invoke from the source buffer, not the consult terminal.
 - `:NovibeProfile` — two-step picker: slot (Act / Consult) then profile. Slots persist independently. No profile = CLI defaults.
@@ -265,6 +330,7 @@ Keep entries concise — a pointer to what matters, not a copy of the code.
 - **Diff mode** (`:NovibeAct`) — after a fill, edit the result, re-select, `:NovibeAct #teach <reason>`. The diff (original fill vs current selection) is captured.
 - **Note mode** (`:NovibeAct`) — `:NovibeAct #teach <reason>` on any selection. Selection + reason captured; no `original` field.
 - **Chat note mode** — `:w #teach <reason>` inside the fill-preview chat. Reason-only entry (no diff, no `current`) — chat feedback is verbal, so an AI→AI diff would be misleading. Side-effect only: no AI call, no queue change.
+- **Act2 integrated mode** — press `t` (default) inside an active `:NovibeAct2` scope. Phase 1 accepts the code and enters edit mode (virt_lines show "edit in scope · t done"); phase 2 opens a reason float and calls `learn.teach(ai_code, current_in_scope, reason, …)`. `original` is the AI's output; `current` is whatever the user edited it to. If unedited, saves as a note. No re-selection required — scope is tracked by extmarks.
 
 `:NovibeAct` picks diff vs note automatically: diff if `_last_fill` exists for the buffer and the selection differs from the last fill's output; otherwise note. Both require a non-empty reason if there's no diff to infer from.
 

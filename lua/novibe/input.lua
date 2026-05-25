@@ -31,6 +31,11 @@ function M.open(on_submit, opts)
   vim.bo[input_buf].bufhidden = "wipe"
   vim.bo[input_buf].filetype = "markdown"
 
+  if opts.initial and opts.initial ~= "" then
+    vim.api.nvim_buf_set_lines(input_buf, 0, -1, false,
+      vim.split(opts.initial, "\n", { plain = true }))
+  end
+
   local win = vim.api.nvim_open_win(input_buf, true, {
     relative = "editor",
     row = row,

@@ -26,6 +26,16 @@ M.defaults = {
   learn = {
     auto_extract_after = 3,  -- nil to disable auto-extraction
   },
+  act2 = {
+    -- Keys are buffer-local and only fire when the cursor is inside the active scope.
+    -- Override in setup() if any default conflicts with your vim bindings.
+    keys = {
+      accept   = "<CR>",       -- splice AI code, show out-of-scope scratch
+      undo     = "U",          -- restore original lines and dismiss (or cancel teach)
+      reprompt = "<leader>r",  -- restore original and re-open input float pre-filled
+      teach    = "<leader>t",  -- accept + enter teach mode (press again when done editing)
+    },
+  },
   system_prompt = [[
 You are a code implementation assistant embedded in a Neovim plugin.
 You receive a code selection from a file and an instruction. You must ALWAYS respond with a single JSON object — no markdown, no prose, nothing outside the JSON.

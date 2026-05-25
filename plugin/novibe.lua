@@ -19,6 +19,10 @@ vim.api.nvim_create_user_command("NovibeAct", function(opts)
   require("novibe").fill(opts.line1, opts.line2)
 end, { range = true, desc = "novibe: act on selection — fill, ask, or #teach" })
 
+vim.api.nvim_create_user_command("NovibeAct2", function(opts)
+  require("novibe.act2").fill(opts.line1, opts.line2)
+end, { range = true, desc = "novibe: act2 — fill in-place with virt_line review controls, no chat window" })
+
 vim.api.nvim_create_user_command("NovibeDistill", function()
   local novibe = require("novibe")
   local config = require("novibe.config")

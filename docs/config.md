@@ -300,6 +300,19 @@ require("novibe").setup({
     -- See docs/teach.md for the full teach → distill → promote lifecycle.
   },
 
+  act2 = {
+    -- Buffer-local review keys for :NovibeAct2.
+    -- All keys are cursor-guarded: they only fire when the cursor is inside the
+    -- active fill scope. Outside the scope, native vim behavior is restored.
+    -- Override any key that conflicts with your vim motion bindings.
+    keys = {
+      accept   = "<CR>",       -- splice AI code, open out-of-scope scratch (non-focused)
+      undo     = "U",          -- restore original lines and dismiss (or cancel teach mode)
+      reprompt = "<leader>r",  -- restore original and reopen input float pre-filled
+      teach    = "<leader>t",  -- two-phase teach: first press enters edit mode, second captures diff
+    },
+  },
+
   system_prompt = "...",
   -- Override the default system prompt entirely, or append to it:
   -- require("novibe.config").defaults.system_prompt .. "\nyour additions"
