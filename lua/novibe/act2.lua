@@ -175,8 +175,7 @@ local function clear_state(bufnr)
   local s = _states[bufnr]
   if not s then return end
   if vim.api.nvim_buf_is_valid(bufnr) then
-    pcall(vim.api.nvim_buf_del_extmark, bufnr, ns, s.top_id)
-    pcall(vim.api.nvim_buf_del_extmark, bufnr, ns, s.bot_id)
+    pcall(vim.api.nvim_buf_clear_namespace, bufnr, ns, 0, -1)
     local keys = get_keys()
     for _, k in ipairs({ keys.accept or "<CR>", keys.undo or "U",
                          keys.reprompt or "<leader>r", keys.teach or "<leader>t" }) do
