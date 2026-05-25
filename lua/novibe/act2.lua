@@ -11,8 +11,8 @@ local ns = vim.api.nvim_create_namespace("novibe_act2")
 -- highlight groups (default = true so user overrides win)
 vim.api.nvim_set_hl(0, "NovibeAct2Review",     { bg = "#1a4731", fg = "#d1fae5", default = true })
 vim.api.nvim_set_hl(0, "NovibeAct2Teach",      { bg = "#431407", fg = "#fed7aa", default = true })
-vim.api.nvim_set_hl(0, "NovibeAct2ChangeOdd",  { bg = "#1c2c3c", default = true })
-vim.api.nvim_set_hl(0, "NovibeAct2ChangeEven", { bg = "#1c3c2c", default = true })
+vim.api.nvim_set_hl(0, "NovibeAct2ChangeOdd",  { bg = "#166534", fg = "#bbf7d0", default = true })
+vim.api.nvim_set_hl(0, "NovibeAct2ChangeEven", { bg = "#14532d", fg = "#bbf7d0", default = true })
 
 -- Per-buffer state: [bufnr] = { token, top_id, bot_id, mode, ... }
 -- mode: "review" | "accepted" | "teach"
