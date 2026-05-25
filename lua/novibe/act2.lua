@@ -129,7 +129,7 @@ local function show_changes(changes)
       table.insert(lines, "```")
     end
 
-    block_ranges[i] = { s = bs, e = #lines - 1 }  -- 0-indexed inclusive
+    block_ranges[i] = { s = bs, e = bs }  -- header line only
     table.insert(lines, "")  -- separator between blocks (not highlighted)
   end
 
