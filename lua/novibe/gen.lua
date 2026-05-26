@@ -206,6 +206,21 @@ local function open_list()
   end)
 end
 
+-- ─── prompt assembly ──────────────────────────────────────────────────────────
+
+-- Exposed for testing.
+function M._build_prompt(description, ctx, root, no_vibe_txt)
+  ctx = ctx or {}
+  local novibe = require("novibe")
+  local prompt = novibe._build_gen_prompt(
+    description, root or "", no_vibe_txt,
+    ctx.buf_name or "", ctx.selection or "")
+  if ctx.diag_txt and ctx.diag_txt ~= "" then
+    prompt = prompt .. "\n" .. ctx.diag_txt
+  end
+  return prompt
+end
+
 -- ─── generation ───────────────────────────────────────────────────────────────
 
 -- ctx: { buf_name, selection, diag_txt } — all optional
@@ -221,13 +236,7 @@ local function run_gen(description, ctx)
 
   local root        = project_root()
   local no_vibe_txt = no_vibe.load("")
-  local novibe      = require("novibe")
-  local prompt      = novibe._build_gen_prompt(
-    description, root, no_vibe_txt,
-    ctx.buf_name or "", ctx.selection or "")
-  if ctx.diag_txt and ctx.diag_txt ~= "" then
-    prompt = prompt .. "\n" .. ctx.diag_txt
-  end
+  local prompt      = M._build_prompt(description, ctx, root, no_vibe_txt)
 
   vim.notify("novibe gen: generating…", vim.log.levels.INFO)
 

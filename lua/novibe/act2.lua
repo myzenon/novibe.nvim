@@ -68,12 +68,17 @@ end
 
 local function vl(text, hl) return { { { text, hl or "Comment" } } } end
 
-local function review_vl(keys)
+local function review_vl(keys, n_changes)
   local cr = keys.accept   or "<CR>"
   local uu = keys.undo     or "U"
   local rr = keys.reprompt or "<leader>r"
   local tt = keys.teach    or "<leader>t"
-  return vl("  " .. cr .. " accept  ·  " .. uu .. " undo  ·  " .. rr .. " re-prompt  ·  " .. tt .. " teach", "NovibeAct2Review")
+  local oo = keys.peek     or "<leader>o"
+  local text = "  " .. cr .. " accept  ·  " .. uu .. " undo  ·  " .. rr .. " re-prompt  ·  " .. tt .. " teach"
+  if n_changes and n_changes > 0 then
+    text = text .. "  ·  " .. oo .. " peek (" .. n_changes .. ")"
+  end
+  return vl(text, "NovibeAct2Review")
 end
 
 local function teach_vl(keys)
@@ -178,7 +183,8 @@ local function clear_state(bufnr)
     pcall(vim.api.nvim_buf_clear_namespace, bufnr, ns, 0, -1)
     local keys = get_keys()
     for _, k in ipairs({ keys.accept or "<CR>", keys.undo or "U",
-                         keys.reprompt or "<leader>r", keys.teach or "<leader>t" }) do
+                         keys.reprompt or "<leader>r", keys.teach or "<leader>t",
+                         keys.peek or "<leader>o" }) do
       pcall(vim.keymap.del, "n", k, { buffer = bufnr })
     end
   end
@@ -190,20 +196,23 @@ end
 
 -- ─── actions ──────────────────────────────────────────────────────────────────
 
+local function maybe_show_changes(s)
+  if #s.response.changes > 0 and not (s.swin and vim.api.nvim_win_is_valid(s.swin)) then
+    local swin = show_changes(s.response.changes)
+    s.swin = swin
+  end
+end
+
 -- <CR>: code is already in buffer — show out-of-scope scratch (if any) and done.
 -- No teach virt remains; user did not ask to teach.
 local function do_confirm(bufnr, s)
-  if #s.response.changes > 0 then
-    show_changes(s.response.changes)
-  end
+  maybe_show_changes(s)
   clear_state(bufnr)
 end
 
 -- First <leader>t: show out-of-scope scratch (if any), enter edit mode.
 local function enter_teach(bufnr, s)
-  if #s.response.changes > 0 then
-    show_changes(s.response.changes)
-  end
+  maybe_show_changes(s)
   s.mode = "teach"
   local keys = get_keys()
   set_virt(bufnr, s, teach_vl(keys), teach_vl(keys))
@@ -225,8 +234,9 @@ local function do_teach_done(bufnr, s)
 
   -- temporarily restore review virt while reason float is open
   local keys = get_keys()
+  local n_ch = #s.response.changes
   s.mode = "review"
-  set_virt(bufnr, s, review_vl(keys), review_vl(keys))
+  set_virt(bufnr, s, review_vl(keys, n_ch), review_vl(keys, n_ch))
 
   input.open(function(reason)
     if not reason or reason == "" then
@@ -262,7 +272,16 @@ local function setup_keymaps(bufnr, s)
   local undo_key     = keys.undo     or "U"
   local reprompt_key = keys.reprompt or "<leader>r"
   local teach_key    = keys.teach    or "<leader>t"
+  local peek_key     = keys.peek     or "<leader>o"
   local bopts        = { buffer = bufnr, nowait = true }
+
+  -- <leader>o: peek out-of-scope changes before accepting
+  if #s.response.changes > 0 then
+    vim.keymap.set("n", peek_key, function()
+      if not cursor_in_scope(bufnr, s) then feedkeys(peek_key); return end
+      maybe_show_changes(s)
+    end, bopts)
+  end
 
   -- <CR>: confirm — show out-of-scope scratch, done (no teach virt remains)
   vim.keymap.set("n", accept_key, function()
@@ -344,6 +363,42 @@ local function start_spinner(bufnr, start_line, end_line)
   end
 end
 
+-- ─── prompt assembly ──────────────────────────────────────────────────────────
+
+-- Exposed for testing. All parameters are plain values — no buffer access.
+function M._build_prompt(selection, ctx_before, ctx_after, no_vibe_txt, enclosing, diag_txt, user_prompt)
+  local parts = {
+    config.options.system_prompt,
+    no_vibe_txt and ("\nProject conventions:\n" .. no_vibe_txt) or "",
+    "",
+  }
+  if enclosing and enclosing ~= "" then
+    table.insert(parts, enclosing)
+    table.insert(parts, "")
+  end
+  if ctx_before and #ctx_before > 0 then
+    table.insert(parts, "Context before selection (DO NOT reproduce this):")
+    table.insert(parts, table.concat(ctx_before, "\n"))
+    table.insert(parts, "")
+  end
+  table.insert(parts, "Selection to modify (return in the 'code' field ONLY):")
+  table.insert(parts, selection)
+  if ctx_after and #ctx_after > 0 then
+    table.insert(parts, "")
+    table.insert(parts, "Context after selection (DO NOT reproduce this):")
+    table.insert(parts, table.concat(ctx_after, "\n"))
+  end
+  if diag_txt and diag_txt ~= "" then
+    table.insert(parts, "")
+    table.insert(parts, diag_txt)
+  end
+  if user_prompt and user_prompt ~= "" then
+    table.insert(parts, "")
+    table.insert(parts, "Instruction: " .. user_prompt)
+  end
+  return table.concat(parts, "\n")
+end
+
 -- ─── main entry point ─────────────────────────────────────────────────────────
 
 -- line1, line2: 1-indexed selection (nil = use visual marks '<,'>)
@@ -393,34 +448,27 @@ function M.fill(line1, line2, bufnr_arg, initial_prompt)
       return
     end
 
-    local parts = {
-      config.options.system_prompt,
-      no_vibe_txt and ("\nProject conventions:\n" .. no_vibe_txt) or "",
-      "",
-    }
+    -- #ask <question>: open a Consult session seeded with current context,
+    -- then auto-send the question so the user can have a conversation.
+    local ask_text = user_prompt:match("^#ask%s+(.*)")
+    if ask_text and vim.trim(ask_text) ~= "" then
+      if _states[bufnr] and _states[bufnr].token == token then
+        _states[bufnr] = nil
+      end
+      local consult    = require("novibe.consult")
+      local already_up = consult.is_active()
+      if not already_up then
+        consult.open(start_line, end_line, true)
+      end
+      consult.send_question(ask_text, already_up)
+      return
+    end
 
     local ctx_before_top = math.max(1, start_line - 10)
     local enclosing = require("novibe.context").enclosing(bufnr, start_line, ctx_before_top)
-    if enclosing then table.insert(parts, enclosing); table.insert(parts, "") end
-    if #ctx_before > 0 then
-      table.insert(parts, "Context before selection (DO NOT reproduce this):")
-      table.insert(parts, table.concat(ctx_before, "\n"))
-      table.insert(parts, "")
-    end
-    table.insert(parts, "Selection to modify (return in the 'code' field ONLY):")
-    table.insert(parts, selection)
-    if #ctx_after > 0 then
-      table.insert(parts, "")
-      table.insert(parts, "Context after selection (DO NOT reproduce this):")
-      table.insert(parts, table.concat(ctx_after, "\n"))
-    end
-    local diag_txt = require("novibe.diag").format(bufnr, start_line, end_line)
-    if diag_txt then table.insert(parts, ""); table.insert(parts, diag_txt) end
-    if user_prompt ~= "" then
-      table.insert(parts, "")
-      table.insert(parts, "Instruction: " .. user_prompt)
-    end
-    local prompt = table.concat(parts, "\n")
+    local diag_txt  = require("novibe.diag").format(bufnr, start_line, end_line)
+    local prompt = M._build_prompt(
+      selection, ctx_before, ctx_after, no_vibe_txt, enclosing, diag_txt, user_prompt)
 
     local stop_spinner = start_spinner(bufnr, start_line, end_line)
 
@@ -462,10 +510,10 @@ function M.fill(line1, line2, bufnr_arg, initial_prompt)
       if type(response.message) ~= "string" then response.message = nil end
       if type(response.changes) ~= "table"  then response.changes = {} end
 
-      local ai_code = vim.trim(response.code)
-      if ai_code == "" then
+      local ai_code = response.code:gsub("^[\n\r]+", ""):gsub("[\n\r]+$", "")
+      if vim.trim(ai_code) == "" then
         vim.notify(
-          "novibe act2: " .. ((response and response.message) or "AI returned no code"),
+          "novibe act2: " .. ((response.message and response.message ~= "") and response.message or "AI returned no code — use #ask to start a conversation"),
           vim.log.levels.WARN
         )
         _states[bufnr] = nil
@@ -502,12 +550,14 @@ function M.fill(line1, line2, bufnr_arg, initial_prompt)
         bot_id         = bot_id,
         mode           = "review",
         teach_original = ai_code,
+        swin           = nil,   -- scratch window handle (set by peek or confirm)
         augroup        = nil,
       }
       _states[bufnr] = s
 
-      local keys = get_keys()
-      set_virt(bufnr, s, review_vl(keys), review_vl(keys))
+      local keys     = get_keys()
+      local n_ch     = #response.changes
+      set_virt(bufnr, s, review_vl(keys, n_ch), review_vl(keys, n_ch))
 
       local ag = vim.api.nvim_create_augroup("novibe_act2_" .. bufnr, { clear = true })
       s.augroup = ag

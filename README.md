@@ -121,14 +121,17 @@ A virtual line appears below your selection in the working buffer once the revie
 
 | Key | Scope | Action |
 |---|---|---|
-| `<CR>` | cursor in scope | Splice AI code into buffer; show out-of-scope changes in a non-focused bottom split |
+| `<CR>` | cursor in scope | Splice AI code into buffer |
 | `U` | cursor in scope | Undo: restore original lines (or cancel teach mode) |
 | `<leader>r` | cursor in scope | Re-prompt: restore original and reopen input float pre-filled |
 | `<leader>t` | cursor in scope | Phase 1: accept + enter edit mode (edit AI code freely); Phase 2: open reason float, capture diff, call teach |
+| `<leader>o` | cursor in scope | Peek: open out-of-scope changes scratch window (shows count in review bar) |
 
-All keys pass through to native vim when the cursor is outside the scope. Remap any key that conflicts with your setup via `setup({ act2 = { keys = { teach = "<leader>t", ... } } })`.
+All keys pass through to native vim when the cursor is outside the scope. Remap any key that conflicts with your setup via `setup({ act2 = { keys = { teach = "<leader>t", peek = "<leader>o", ... } } })`.
 
-**Out-of-scope changes** (imports, types, other files) appear in a read-only bottom split — you apply them manually. Close with `q`.
+**Out-of-scope changes** (imports, types, other files): the review bar shows `<leader>o peek (N)` when there are changes. Press it to open a read-only scratch window — close with `q`. If AI returns no code, a notification is shown instead of the review controls.
+
+**Ask flow** (`#ask <question>`): type `#ask why is this function slow?` in the input float to skip fill mode and route to `:NovibeConsult`. If a Consult session is already open the question is sent straight to it — the conversation continues with whatever context is already there. Otherwise a new session opens seeded with the current file/selection context.
 
 **Teach flow** (`t`): press `t` → code is accepted and you can edit it in-place → press `t` again → type your reason → diff (AI output vs your edit) is captured automatically. No re-selection, no `#teach` prefix needed.
 
@@ -166,9 +169,9 @@ No auto-apply — you save each file yourself, so hallucinated paths never silen
 | Command              | What                                                         |
 | -------------------- | ------------------------------------------------------------ |
 | `:NovibeAct`         | Fill selection (or current line) · `#teach <reason>` to capture style evidence |
-| `:NovibeAct2`        | Fill in-place with virt_line review controls — no chat window. `<CR>` accept · `U` undo · `<leader>r` re-prompt · `<leader>t` teach |
+| `:NovibeAct2`        | Fill in-place with virt_line review controls — no chat window. `<CR>` accept · `U` undo · `<leader>r` re-prompt · `<leader>t` teach · `<leader>o` peek changes. `#ask <question>` opens Consult instead |
 | `:NovibeGen`         | Generate new files — prompt if no pending files, list if pending. `<C-f>` change path · `<leader>r` re-prompt · `:w` save |
-| `:NovibeConsult`     | Open interactive consult session (vsplit); claude / gemini / codex: context auto-injected; opencode: manual |
+| `:NovibeConsult`     | Open interactive consult session (vsplit); claude / gemini / codex: context auto-injected; opencode: manual. `q` closes in normal mode |
 | `:NovibeConsultPrompt` | Push consult seed into the active consult terminal (required for opencode; works with any provider) |
 | `:NovibeProfile`     | Two-step picker: choose slot (Act / Consult), then profile   |
 | `:NovibeReset`       | Start a fresh session on the next fill                       |

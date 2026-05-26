@@ -223,6 +223,10 @@ function M.open(line1, line2, has_range)
   -- <Esc><Esc> exits terminal mode without sending ESC to the TUI process
   vim.keymap.set("t", "<Esc><Esc>", "<C-\\><C-n>", { buffer = state.buf, desc = "novibe: exit terminal mode" })
 
+  -- q in normal mode closes the consult window and stops the process
+  vim.keymap.set("n", "q", function() vim.schedule(cleanup) end,
+    { buffer = state.buf, nowait = true, desc = "novibe: close consult" })
+
   -- Override TmuxNavigator terminal-mode mappings so they exit terminal mode
   -- first and let the normal-mode mapping handle navigation, instead of leaking
   -- command text ("TmuxNavigateLeft" etc.) into the terminal process.
@@ -334,6 +338,10 @@ function M.open_agent(line1, line2, has_range)
   state.job = job
 
   vim.keymap.set("t", "<Esc><Esc>", "<C-\\><C-n>", { buffer = state.buf, desc = "novibe: exit terminal mode" })
+
+  vim.keymap.set("n", "q", function() vim.schedule(cleanup) end,
+    { buffer = state.buf, nowait = true, desc = "novibe: close consult" })
+
   for _, key in ipairs({ "<C-h>", "<C-j>", "<C-k>", "<C-l>" }) do
     vim.keymap.set("t", key, "<C-\\><C-n>" .. key, { buffer = state.buf, nowait = true })
   end
@@ -369,6 +377,29 @@ function M.open_agent(line1, line2, has_range)
   else
     vim.cmd("startinsert")
   end
+end
+
+-- Send a plain question into the active consult terminal after a short delay.
+-- Used by act2's #ask flow: consult.open seeds context, send_question fires the question.
+function M.is_active()
+  return state.job ~= nil
+end
+
+function M.send_question(text, immediate)
+  if not state.job then
+    vim.notify("novibe: no active consult session", vim.log.levels.WARN)
+    return
+  end
+  local config    = require("novibe.config")
+  local providers = require("novibe.providers")
+  local profile   = config.options.active_consult_profile or config.options.active_profile
+  local provider  = providers.get(profile and profile.provider)
+  -- opencode needs longer — its seed is deferred 3 s after startup
+  local delay = immediate and 100 or (provider.name == "opencode" and 5000 or 2000)
+  vim.defer_fn(function()
+    if not state.job then return end
+    pcall(vim.api.nvim_chan_send, state.job, text:gsub("[\r\n]+$", "") .. "\r")
+  end, delay)
 end
 
 -- Build the seed from the current buffer/selection and chansend it into the

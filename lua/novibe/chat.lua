@@ -794,7 +794,7 @@ function M.open_fill(pending, opts)
       local new_q = {}
       if pending.bufnr and cur_q and cur_q.type == "code"
          and response.code and response.code ~= vim.NIL and response.code ~= "" then
-        table.insert(new_q, { type = "code", code = vim.trim(response.code) })
+        table.insert(new_q, { type = "code", code = response.code:gsub("^[\n\r]+", ""):gsub("[\n\r]+$", "") })
       end
       local seen_files = {}
       for _, ch in ipairs(normalize_changes(response.changes)) do
@@ -891,7 +891,7 @@ function M.open_fill(pending, opts)
 
     questions = {}
     if pending.bufnr and response.code and response.code ~= vim.NIL and response.code ~= "" then
-      local new_code = vim.trim(response.code)
+      local new_code = response.code:gsub("^[\n\r]+", ""):gsub("[\n\r]+$", "")
       -- Suppress code question when AI echoes back identical content with only
       -- whitespace/indentation differences (e.g. answering a question, not editing).
       local orig_lines = vim.api.nvim_buf_is_valid(pending.bufnr)
