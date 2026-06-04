@@ -472,9 +472,25 @@ function M.fill(line1, line2, bufnr_arg, initial_prompt)
       if _states[bufnr] and _states[bufnr].token == token then
         _states[bufnr] = nil
       end
-      local rel = vim.fn.fnamemodify(filename, ":~:.")
-      local msg = string.format("[Act2] %s:%d-%d — %s", rel, start_line, end_line, user_prompt)
-      consult.send_question(msg, true)
+      local rel          = vim.fn.fnamemodify(filename, ":~:.")
+      local ctx_before_top = math.max(1, start_line - 10)
+      local enclosing    = require("novibe.context").enclosing(bufnr, start_line, ctx_before_top)
+      local diag_txt     = require("novibe.diag").format(bufnr, start_line, end_line)
+      local parts        = { string.format("[Act2] %s:%d-%d — %s", rel, start_line, end_line, user_prompt) }
+      if enclosing and enclosing ~= "" then
+        parts[#parts + 1] = "\n\n" .. enclosing
+      end
+      if #ctx_before > 0 then
+        parts[#parts + 1] = "\n\nContext before selection:\n" .. table.concat(ctx_before, "\n")
+      end
+      parts[#parts + 1] = "\n\nSelection:\n```\n" .. selection .. "\n```"
+      if #ctx_after > 0 then
+        parts[#parts + 1] = "\n\nContext after selection:\n" .. table.concat(ctx_after, "\n")
+      end
+      if diag_txt and diag_txt ~= "" then
+        parts[#parts + 1] = "\n\n" .. diag_txt
+      end
+      consult.send_question(table.concat(parts, ""), true)
       return
     end
 
