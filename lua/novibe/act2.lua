@@ -464,6 +464,20 @@ function M.fill(line1, line2, bufnr_arg, initial_prompt)
       return
     end
 
+    -- Agent routing: if a NovibeAgent session is active, send context + instruction
+    -- to the agent instead of running a local fill. Agent has full file access, so
+    -- file:line-range is enough — no need to inline the selection.
+    local consult = require("novibe.consult")
+    if consult.is_agent_active() then
+      if _states[bufnr] and _states[bufnr].token == token then
+        _states[bufnr] = nil
+      end
+      local rel = vim.fn.fnamemodify(filename, ":~:.")
+      local msg = string.format("[Act2] %s:%d-%d — %s", rel, start_line, end_line, user_prompt)
+      consult.send_question(msg, true)
+      return
+    end
+
     local ctx_before_top = math.max(1, start_line - 10)
     local enclosing = require("novibe.context").enclosing(bufnr, start_line, ctx_before_top)
     local diag_txt  = require("novibe.diag").format(bufnr, start_line, end_line)

@@ -1,6 +1,6 @@
 local M = {}
 
-local state = { buf = nil, win = nil, job = nil, augroup = nil }
+local state = { buf = nil, win = nil, job = nil, augroup = nil, mode = nil }
 
 local function cleanup()
   -- Remove augroup first so BufUnload doesn't fire during our own teardown
@@ -15,8 +15,9 @@ local function cleanup()
   if state.buf and vim.api.nvim_buf_is_valid(state.buf) then
     pcall(vim.api.nvim_buf_delete, state.buf, { force = true })
   end
-  state.buf = nil
-  state.win = nil
+  state.buf  = nil
+  state.win  = nil
+  state.mode = nil
 end
 
 local CONSULT_HEADER = [[
@@ -173,8 +174,9 @@ function M.open(line1, line2, has_range)
     if profile and profile.model then vim.list_extend(cmd, { "--model", profile.model }) end
     vim.list_extend(cmd, { "--prompt-interactive", seed })
   elseif provider_name == "antigravity" then
-    -- agy --prompt-interactive seeds context then stays in interactive TUI mode (no --model flag)
-    cmd = { bin, "--prompt-interactive", seed }
+    cmd = { bin }
+    if profile and profile.model then vim.list_extend(cmd, { "--model", profile.model }) end
+    vim.list_extend(cmd, { "--prompt-interactive", seed })
   elseif provider_name == "codex" then
     -- codex TUI accepts an optional initial prompt as a positional argument
     cmd = { bin }
@@ -219,6 +221,7 @@ function M.open(line1, line2, has_range)
   state.buf    = vim.api.nvim_get_current_buf()
   state.win    = term_win
   state.job    = job
+  state.mode   = "consult"
 
   -- <Esc><Esc> exits terminal mode without sending ESC to the TUI process
   vim.keymap.set("t", "<Esc><Esc>", "<C-\\><C-n>", { buffer = state.buf, desc = "novibe: exit terminal mode" })
@@ -295,7 +298,9 @@ function M.open_agent(line1, line2, has_range)
     if profile and profile.model then vim.list_extend(cmd, { "--model", profile.model }) end
     vim.list_extend(cmd, { "--prompt-interactive", seed })
   elseif provider_name == "antigravity" then
-    cmd = { bin, "--prompt-interactive", seed }
+    cmd = { bin }
+    if profile and profile.model then vim.list_extend(cmd, { "--model", profile.model }) end
+    vim.list_extend(cmd, { "--prompt-interactive", seed })
   elseif provider_name == "codex" then
     cmd = { bin }
     if profile and profile.model then vim.list_extend(cmd, { "-m", profile.model }) end
@@ -333,9 +338,10 @@ function M.open_agent(line1, line2, has_range)
     end,
   })
 
-  state.buf = vim.api.nvim_get_current_buf()
-  state.win = term_win
-  state.job = job
+  state.buf  = vim.api.nvim_get_current_buf()
+  state.win  = term_win
+  state.job  = job
+  state.mode = "agent"
 
   vim.keymap.set("t", "<Esc><Esc>", "<C-\\><C-n>", { buffer = state.buf, desc = "novibe: exit terminal mode" })
 
@@ -383,6 +389,10 @@ end
 -- Used by act2's #ask flow: consult.open seeds context, send_question fires the question.
 function M.is_active()
   return state.job ~= nil
+end
+
+function M.is_agent_active()
+  return state.job ~= nil and state.mode == "agent"
 end
 
 function M.send_question(text, immediate)
