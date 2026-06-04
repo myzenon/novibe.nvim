@@ -45,8 +45,8 @@ end
 -- Non-streaming: parse_chunk is never called, but satisfies the interface.
 function M.parse_chunk(_) return "" end
 
--- opts: { session_id, stream }
--- agy has no --model, --effort, --bare, or system-prompt flags.
+-- opts: { profile, session_id, stream }
+-- agy has no --effort, --bare, or system-prompt flags.
 -- System prompt is prepended to the user prompt since there is no injection flag.
 -- Session continuity uses --continue (resumes most recent conversation for cwd).
 function M.build_cmd(bin, prompt, opts)
@@ -56,6 +56,9 @@ function M.build_cmd(bin, prompt, opts)
     or prompt
 
   local cmd = { bin }
+  if opts.profile and opts.profile.model then
+    vim.list_extend(cmd, { "--model", opts.profile.model })
+  end
   if opts.session_id and opts.session_id ~= "" then
     table.insert(cmd, "--continue")
   end

@@ -214,10 +214,12 @@ Non-streaming: all JSONL events arrive at once. `parse_output` finds the `item.c
 ```lua
 -- fresh session:
 { agy_bin, "--print", prompt }
+-- with model profile:
+{ agy_bin, "--model", profile.model, "--print", prompt }
 -- resume (session_id sentinel "__continue__" signals prior exchange exists):
 { agy_bin, "--continue", "--print", prompt }
 ```
-Non-streaming: stdout is the raw AI response text (no JSON wrapper). `parse_output` parses it directly as JSON. No `--model`, `--effort`, `--bare`, or system-prompt flags. System prompt is prepended to the user prompt inside `<instructions>` tags (no CLI injection). Session continuity uses `--continue` (resumes the most recent conversation for the cwd); `parse_output` always returns `session_id = "__continue__"` as a sentinel to trigger `--continue` on subsequent calls.
+Non-streaming: stdout is the raw AI response text (no JSON wrapper). `parse_output` parses it directly as JSON. No `--effort`, `--bare`, or system-prompt flags. `--model` is supported (added in agy 1.0.5); run `agy models` for available names. System prompt is prepended to the user prompt inside `<instructions>` tags (no CLI injection). Session continuity uses `--continue` (resumes the most recent conversation for the cwd); `parse_output` always returns `session_id = "__continue__"` as a sentinel to trigger `--continue` on subsequent calls.
 
 **`:NovibeConsult` (TUI mode):**
 ```lua
@@ -225,7 +227,7 @@ Non-streaming: stdout is the raw AI response text (no JSON wrapper). `parse_outp
 { opencode_bin }                                   -- no seed flag; use NovibeConsultPrompt
 { gemini_bin,   "--prompt-interactive",   seed }  -- + optional --model
 { codex_bin,    seed }                             -- seed as initial prompt positional arg
-{ agy_bin,      "--prompt-interactive",   seed }  -- no --model flag
+{ agy_bin,      "--prompt-interactive",   seed }  -- + optional --model
 ```
 
 ## Profiles
@@ -240,7 +242,7 @@ require("novibe").setup({
     { label = "OC DeepSeek",  provider = "opencode", model = "opencode-go/deepseek-v4-pro", effort = "high" },
     { label = "Gemini Flash", provider = "gemini",   model = "gemini-2.0-flash"                             },
     { label = "Codex o4",     provider = "codex",       model = "o4-mini"                                      },
-    { label = "Antigravity",  provider = "antigravity"                                                          },
+    { label = "Antigravity",  provider = "antigravity", model = "Claude Sonnet 4.6 (Thinking)"                 },
   }
 })
 ```
@@ -255,7 +257,7 @@ require("novibe").setup({
 - `model` (opencode): `"provider/model"` (run `opencode models`)
 - `model` (gemini): full ID (run `gemini`, check `/model` in TUI)
 - `model` (codex): model ID (e.g. `o4-mini`, `o3`); run `codex` and check available models
-- `model` (antigravity): ignored (no `--model` CLI flag; set model via `agy` settings)
+- `model` (antigravity): display name string (run `agy models`; e.g. `"Claude Sonnet 4.6 (Thinking)"`) → `--model`
 
 ## JSON Response Schema
 
