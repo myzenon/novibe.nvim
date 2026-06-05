@@ -15,6 +15,10 @@ vim.api.nvim_create_user_command("NovibeConsultPrompt", function(opts)
   require("novibe.consult").send_prompt(opts.line1, opts.line2, opts.range > 0)
 end, { range = true, desc = "novibe: send current file/selection context to active consult terminal (for opencode)" })
 
+vim.api.nvim_create_user_command("NovibeAgentPrompt", function(opts)
+  require("novibe.consult").send_agent_prompt(opts.line1, opts.line2, opts.range > 0)
+end, { range = true, desc = "novibe: re-inject no_vibe conventions + context into active agent session" })
+
 vim.api.nvim_create_user_command("NovibeAct", function(opts)
   require("novibe").fill(opts.line1, opts.line2)
 end, { range = true, desc = "novibe: act on selection — fill, ask, or #teach" })

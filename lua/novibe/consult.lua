@@ -436,4 +436,25 @@ function M.send_prompt(line1, line2, has_range)
   end
 end
 
+function M.send_agent_prompt(line1, line2, has_range)
+  if not state.job or not state.buf or not vim.api.nvim_buf_is_valid(state.buf) then
+    vim.notify("novibe: no active agent session — run :NovibeAgent first", vim.log.levels.WARN)
+    return
+  end
+  if state.mode ~= "agent" then
+    vim.notify("novibe: active session is not an agent session", vim.log.levels.WARN)
+    return
+  end
+  if vim.api.nvim_get_current_buf() == state.buf then
+    vim.notify("novibe: run :NovibeAgentPrompt from the source buffer, not the agent terminal", vim.log.levels.WARN)
+    return
+  end
+  local seed = build_agent_seed(line1, line2, has_range)
+  local body = seed:gsub("[\r\n]+$", "")
+  local ok, err = pcall(vim.api.nvim_chan_send, state.job, "\x1b[200~" .. body .. "\x1b[201~\r")
+  if not ok then
+    vim.notify("novibe: chan_send failed — " .. tostring(err), vim.log.levels.ERROR)
+  end
+end
+
 return M
