@@ -408,7 +408,8 @@ function M.send_question(text, immediate)
   local delay = immediate and 100 or (provider.name == "opencode" and 5000 or 2000)
   vim.defer_fn(function()
     if not state.job then return end
-    pcall(vim.api.nvim_chan_send, state.job, text:gsub("[\r\n]+$", "") .. "\r")
+    local body = text:gsub("[\r\n]+$", "")
+    pcall(vim.api.nvim_chan_send, state.job, "\x1b[200~" .. body .. "\x1b[201~\r")
   end, delay)
 end
 
