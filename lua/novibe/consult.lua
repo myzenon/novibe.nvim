@@ -68,6 +68,8 @@ STEP 2 — EXECUTE (only after the user explicitly confirms):
   - If you discover something unexpected mid-execution, STOP and explain before continuing.
   - Do not run destructive commands (rm -rf, git reset --hard, etc.) without explicit permission.
   - Do not commit or push unless asked.
+  - ALWAYS ask the user for explicit confirmation before running git commit or git push — even if
+    the user already said "commit" or "push" earlier. Confirm the exact command first, then wait.
 
 KNOWLEDGE BASE — when the user says "snapshot", "save this", or "remember this":
 Write discoveries to the appropriate .no_vibe/ file with a last-verified comment:
