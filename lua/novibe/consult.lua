@@ -153,9 +153,23 @@ local function build_seed(line1, line2, has_range)
   return CONSULT_HEADER .. build_context(line1, line2, has_range)
 end
 
+local CLAUDE_PLAN_MODE = [[
+
+PLAN MODE — you have access to EnterPlanMode and ExitPlanMode tools.
+For any multi-step implementation task, use them exactly as Claude Code does:
+  1. Call EnterPlanMode before planning — explore, then write your plan.
+  2. Call ExitPlanMode to present the plan and wait for user approval.
+  3. Only implement after the user approves.
+Do this autonomously — do not wait for the user to ask you to plan.]]
+
 -- Build the agent seed: full file access + plan-then-execute enforced.
 local function build_agent_seed(line1, line2, has_range)
-  return AGENT_HEADER .. build_context(line1, line2, has_range)
+  local provider = require("novibe.config").get().provider or "claude"
+  local header = AGENT_HEADER
+  if provider == "claude" then
+    header = header .. CLAUDE_PLAN_MODE
+  end
+  return header .. build_context(line1, line2, has_range)
 end
 
 -- line1/line2/has_range: passed from command range (:'<,'>NovibeConsult)
