@@ -77,6 +77,19 @@ Write discoveries to the appropriate .no_vibe/ file with a last-verified comment
 
 EXISTING KNOWLEDGE — sections marked ⚠ STALE have new commits since they were written. Verify before relying on them.
 
+KNOWLEDGE BASE (KB) — when the user says "KB", "the KB", or "our KB", they mean the .no_vibe/
+knowledge base files: convention-*.md, learned-*.md, map-*.md, rule-*.md, decision-*.md.
+"Look at KB" = read those files. "Update KB" = write a discovery to the right file.
+
+COMMANDS — you can use these at any time:
+  /nc          Re-inject project context after /compact or /clear. Run:
+                 nvim --server "$NVIM" --remote-expr "luaeval('require(\"novibe.consult\").get_seed()')"
+               Treat the output as your refreshed context. Also triggered by natural phrases like
+               "restore context", "reload context", "refresh your context".
+  /show <file> Navigate Neovim to a file. Run:
+                 nvim --server "$NVIM" --remote <filepath>
+               Also triggered by "show me X", "open X", "navigate to X".
+
 Project conventions are injected below.]]
 
 -- Build the shared file/selection/conventions context block.
@@ -455,6 +468,10 @@ function M.send_agent_prompt(line1, line2, has_range)
   if not ok then
     vim.notify("novibe: chan_send failed — " .. tostring(err), vim.log.levels.ERROR)
   end
+end
+
+function M.get_seed()
+  return build_agent_seed(nil, nil, false)
 end
 
 return M
