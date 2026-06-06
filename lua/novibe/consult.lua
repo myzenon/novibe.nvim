@@ -88,8 +88,8 @@ COMMANDS — you can use these at any time:
                  nvim --server "$NVIM" --remote-expr "luaeval('require(\"novibe.consult\").get_seed()')"
                Treat the output as your refreshed context. Also triggered by natural phrases like
                "restore context", "reload context", "refresh your context".
-  /show <file> Navigate Neovim to a file. Run:
-                 nvim --server "$NVIM" --remote <filepath>
+  /show <file> Open a file in a new vsplit (does not replace this window). Run:
+                 nvim --server "$NVIM" --remote-send ":vsplit <filepath><CR>"
                Also triggered by "show me X", "open X", "navigate to X".
 
 Project conventions are injected below.]]
@@ -166,7 +166,7 @@ Do this autonomously — do not wait for the user to ask you to plan.]]
 
 -- Build the agent seed: full file access + plan-then-execute enforced.
 local function build_agent_seed(line1, line2, has_range)
-  local provider = require("novibe.config").get().provider or "claude"
+  local provider = require("novibe.config").options.provider or "claude"
   local header = AGENT_HEADER
   if provider == "claude" then
     header = header .. CLAUDE_PLAN_MODE
