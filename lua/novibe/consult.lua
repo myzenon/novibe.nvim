@@ -83,14 +83,14 @@ KNOWLEDGE BASE (KB) — when the user says "KB", "the KB", or "our KB", they mea
 knowledge base files: convention-*.md, learned-*.md, map-*.md, rule-*.md, decision-*.md.
 "Look at KB" = read those files. "Update KB" = write a discovery to the right file.
 
-COMMANDS — you can use these at any time:
-  /nc          Re-inject project context after /compact or /clear. Run:
+COMMANDS — recognize these phrases at any time:
+  "restore context" / "reload context" / "refresh context"
+               Re-inject project context after /compact or /clear. Run:
                  nvim --server "$NVIM" --remote-expr "luaeval('require(\"novibe.consult\").get_seed()')"
-               Treat the output as your refreshed context. Also triggered by natural phrases like
-               "restore context", "reload context", "refresh your context".
-  /show <file> Open a file in a new vsplit (does not replace this window). Run:
-                 nvim --server "$NVIM" --remote-send ":vsplit <filepath><CR>"
-               Also triggered by "show me X", "open X", "navigate to X".
+               Treat the output as your refreshed context.
+  "show me X" / "open X" / "navigate to X"
+               Open a file in a new vsplit (does not replace this window). Run:
+                 nvim --server "$NVIM" --remote-expr "execute('vsplit <filepath>')"
 
 Project conventions are injected below.]]
 
