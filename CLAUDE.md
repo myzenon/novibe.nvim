@@ -36,11 +36,12 @@ lua/novibe/
   diag.lua     — vim.diagnostic.get() output formatted for the selection range
   apply.lua    — content-based find/replace across files (strict then lenient pass)
   glob.lua     — glob → Lua pattern + section header matching
-  no_vibe.lua  — loads NO_VIBE.md + .no_vibe/{convention,learned,map,rule,decision}-*.md,
-                 filters by filename, stale detection via git log
+  no_vibe.lua  — loads NO_VIBE.md + .no_vibe/{convention,learned,doc,rule,decision}-*.md,
+                 filters by filename, stale detection via git log; find_novibe_dir() walks up
   learn.lua    — #teach capture (.no_vibe/diffs.json) + distillation into learned-*.md
   promote.lua  — :NovibePromote — graduate mature rules (n≥3) into convention files
-  consult.lua  — singleton interactive consult: seeds file/line/selection/conventions
+  consult.lua  — :NovibeConsult (vsplit advisory) + :NovibeAgent (replaces current buffer, full-access):
+                 both seed file/line/selection/conventions; Agent also injects agent-task.md state
   providers/   — claude.lua, opencode.lua, gemini.lua, codex.lua, antigravity.lua: find_bin,
                  build_cmd, parse_output, parse_chunk, streaming
 plugin/novibe.lua — guard + user commands
@@ -162,9 +163,28 @@ Act2 always passes `use_continue = false`. Each fill is a fresh session — no `
 - `:NovibeAct2` — alternative no-chat-window fill. AI code is written directly into the buffer; virt_lines above/below the scope show review controls (`<CR>` accept, `U` undo, `<leader>r` re-prompt, `<leader>t` teach, `<leader>o` peek out-of-scope changes). Review bar shows `<leader>o peek (N)` only when changes[] is non-empty. If AI returns no code, `vim.notify` the message and exit (no virt_lines). `#ask <question>` in the input float skips fill and opens a Consult session with context + question pre-seeded. Keys are cursor-guarded (only fire when cursor is inside scope). Two-phase `<leader>t` teach: first press accepts + enters edit mode, second press captures the diff and opens a reason float. Session is always fresh (no `--continue`). All keys configurable via `setup({ act2 = { keys = {...} } })`.
 - `:NovibeConsult` — singleton interactive session in a vsplit. Process dies with buffer; `<Esc><Esc>` exits terminal mode; `q` in normal mode closes the window; range injects selection. Seed = file, line, current commit hash, matched `.no_vibe` sections, snapshot instructions. Injected via `--append-system-prompt` (claude) or `--prompt-interactive` (gemini). AI may freely edit `CLAUDE.md` and `.no_vibe/*.md`; all other files off-limits. Say **"snapshot"** mid-session to persist discoveries. **opencode workaround:** no flag exists, so use `:NovibeConsultPrompt` after opening — the seed is `chansend`-ed into the input box; press Enter to submit.
 - `:NovibeConsultPrompt` — build the consult seed from current buffer/selection and chansend it into the active consult terminal. Required for opencode; optional refresh for claude/gemini/codex. Invoke from the source buffer, not the consult terminal.
-- `:NovibeProfile` — two-step picker: slot (Act / Consult) then profile. Slots persist independently. No profile = CLI defaults.
+- `:NovibeAgent` — singleton full-access agent session; **replaces the current buffer** (not a vsplit). Full read/write project access. Mandatory task management via `.no_vibe/agent-task.md` — current task is injected into the seed. Uses `active_agent_profile` (independent of Act/Consult slots).
+- `:NovibeProfile` — two-step picker: slot (Act / Consult / Agent) then profile. Slots persist independently. No profile = CLI defaults.
 - `:NovibeDistill` — distill accumulated `#teach` diffs into `.no_vibe/learned-*.md` (AI decides the topic split).
 - `:NovibePromote` — graduate mature learned rules (n≥3) into canonical `.no_vibe/convention-*.md`; opens review split for inspection.
+
+## Agent Task Management
+
+`:NovibeAgent` writes to three files in `.no_vibe/` (discovered by walking up from `cwd` via `no_vibe.find_novibe_dir()`). The agent's system prompt (`AGENT_HEADER`) instructs it to maintain these files automatically.
+
+**Files:**
+- `agent-task.md` — active task: goal, description, task list with `[x]`/`[ ]` checkboxes, optional PR/Files
+- `agent-task-paused.md` — paused/blocked tasks (multiple `## paused` sections)
+- `agent-task-completed.md` — append-only history of completed tasks (goal, date, summary, decisions)
+
+**Seed injection:** `build_agent_seed()` reads `agent-task.md` and appends its content as `CURRENT AGENT TASK:` at the end of the seed. If `agent-task.md` is absent, falls back to `task.md` (legacy) with a translate-format instruction.
+
+**Agent behaviors (prompt-driven, not Lua):**
+- Session start: scope-check the user's first message against the active Goal; suggest pause or abandon if out of scope (once per session only)
+- Task creation: write `agent-task.md` before doing any work on a new task
+- During work: mark `[x]` immediately when a task item is complete; advance `← current` to the next item
+- All done: append completed entry to `agent-task-completed.md`, clear `## current` content in `agent-task.md`
+- Pause: move `## current` to `agent-task-paused.md` as a `## paused` block, clear `agent-task.md`
 
 ## CLI Invocation
 
@@ -299,7 +319,7 @@ Load order:
 1. `NO_VIBE.md` at project root — single-file shortcut for simple projects
 2. `.no_vibe/convention-*.md` — human-written coding rules
 3. `.no_vibe/learned-*.md` — auto-distilled from `#teach`
-4. `.no_vibe/map-*.md` — **dependency graph**: call chains, inheritance
+4. `.no_vibe/doc-*.md` — **project documentation**: how features work, call chains, module descriptions, structural knowledge
 5. `.no_vibe/rule-*.md` — **behavioral constraints**: e.g. "always use Class X as db proxy"
 6. `.no_vibe/decision-*.md` — **architectural ADRs**: the why + rejected alternatives
 
@@ -318,7 +338,7 @@ Headers are comma-separated globs (`*` = non-separator, `**` = any path). `alway
 
 ### Knowledge Base: Stale Detection
 
-`map-*` / `rule-*` / `decision-*` sections support `<!-- last-verified: HASH -->`:
+`doc-*` / `rule-*` / `decision-*` sections support `<!-- last-verified: HASH -->`:
 
 ```markdown
 ## src/db/**
@@ -332,7 +352,7 @@ On load, `no_vibe.lua` runs `git log HASH..HEAD -- <path>` for directory-style h
 
 Built exclusively in `:NovibeConsult`. Say **"snapshot"** to have the AI write a discovery to the right file with the current commit hash. Grows lazily, focused on areas you actually touch.
 
-- `map-<area>.md` — structural (dependencies, call graphs)
+- `doc-<area>.md` — project documentation (how features work, call graphs, structural knowledge)
 - `rule-<area>.md` — behavioral (constraints on interacting with the area)
 - `decision-<area>.md` — reasoning (why, what was rejected)
 

@@ -58,6 +58,21 @@ local function parse_file(path, filename, matched)
   flush()
 end
 
+-- Walk up from cwd to find the nearest directory containing a .no_vibe/ subdirectory.
+-- Returns the .no_vibe/ path, or nil.
+function M.find_novibe_dir()
+  local dir = vim.fn.getcwd()
+  for _ = 1, 10 do
+    if vim.fn.isdirectory(dir .. "/.no_vibe") == 1 then
+      return dir .. "/.no_vibe"
+    end
+    local parent = vim.fn.fnamemodify(dir, ":h")
+    if parent == dir then break end
+    dir = parent
+  end
+  return nil
+end
+
 -- Walk up from cwd looking for NO_VIBE.md or .no_vibe/ with content.
 -- Returns { root, novibe_md, conventions, learned, knowledge } or nil.
 function M.discover()
@@ -67,20 +82,20 @@ function M.discover()
     local novibe_dir       = dir .. "/.no_vibe"
     local convention_files = vim.fn.glob(novibe_dir .. "/convention-*.md", false, true)
     local learned_files    = vim.fn.glob(novibe_dir .. "/learned-*.md", false, true)
-    local map_files        = vim.fn.glob(novibe_dir .. "/map-*.md", false, true)
+    local doc_files        = vim.fn.glob(novibe_dir .. "/doc-*.md", false, true)
     local rule_files       = vim.fn.glob(novibe_dir .. "/rule-*.md", false, true)
     local decision_files   = vim.fn.glob(novibe_dir .. "/decision-*.md", false, true)
     local has_novibe       = vim.fn.filereadable(novibe_path) == 1
-    local has_knowledge    = #map_files > 0 or #rule_files > 0 or #decision_files > 0
+    local has_knowledge    = #doc_files > 0 or #rule_files > 0 or #decision_files > 0
 
     if has_novibe or #convention_files > 0 or #learned_files > 0 or has_knowledge then
       table.sort(convention_files)
       table.sort(learned_files)
-      table.sort(map_files)
+      table.sort(doc_files)
       table.sort(rule_files)
       table.sort(decision_files)
       local knowledge = {}
-      vim.list_extend(knowledge, map_files)
+      vim.list_extend(knowledge, doc_files)
       vim.list_extend(knowledge, rule_files)
       vim.list_extend(knowledge, decision_files)
       return {
@@ -88,7 +103,7 @@ function M.discover()
         novibe_md   = has_novibe and novibe_path or nil,
         conventions = convention_files,
         learned     = learned_files,
-        maps        = map_files,
+        docs        = doc_files,
         rules       = rule_files,
         decisions   = decision_files,
         knowledge   = knowledge,

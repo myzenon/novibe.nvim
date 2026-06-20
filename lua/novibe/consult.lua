@@ -26,12 +26,12 @@ This is a CONSULT session. Your role is primarily advisory — discuss, explain,
 FILE WRITING RULES:
 - You MAY freely edit these files when the user asks:
     CLAUDE.md, .no_vibe/convention-*.md, .no_vibe/learned-*.md
-    .no_vibe/map-*.md, .no_vibe/rule-*.md, .no_vibe/decision-*.md
+    .no_vibe/doc-*.md, .no_vibe/rule-*.md, .no_vibe/decision-*.md
 - For ALL other files: do NOT modify them, write code to disk, or run shell commands.
 
 KNOWLEDGE BASE — when the user says "snapshot", "save this", or "remember this":
 Write what was just discovered to the appropriate .no_vibe/ file:
-  map-<area>.md     — dependency graph: who depends on what, call chains, inheritance
+  doc-<area>.md     — project documentation: how features work, call chains, structural knowledge
   rule-<area>.md    — behavioral constraints: how to interact with each area (e.g. "always use Class X as proxy")
   decision-<area>.md — the WHY: architectural decisions and rejected alternatives
 
@@ -73,14 +73,14 @@ STEP 2 — EXECUTE (only after the user explicitly confirms):
 
 KNOWLEDGE BASE — when the user says "snapshot", "save this", or "remember this":
 Write discoveries to the appropriate .no_vibe/ file with a last-verified comment:
-  map-<area>.md      — dependency graph: call chains, inheritance, who owns what
+  doc-<area>.md      — project documentation: how features work, call chains, structural knowledge
   rule-<area>.md     — behavioral constraints: how to interact with each area
   decision-<area>.md — the WHY: architectural decisions and rejected alternatives
 
 EXISTING KNOWLEDGE — sections marked ⚠ STALE have new commits since they were written. Verify before relying on them.
 
 KNOWLEDGE BASE (KB) — when the user says "KB", "the KB", or "our KB", they mean the .no_vibe/
-knowledge base files: convention-*.md, learned-*.md, map-*.md, rule-*.md, decision-*.md.
+knowledge base files: convention-*.md, learned-*.md, doc-*.md, rule-*.md, decision-*.md.
 "Look at KB" = read those files. "Update KB" = write a discovery to the right file.
 
 COMMANDS — recognize these phrases at any time:
@@ -91,6 +91,53 @@ COMMANDS — recognize these phrases at any time:
   "show me X" / "open X" / "navigate to X"
                Open a file in a new vsplit (does not replace this window). Run:
                  nvim --server "$NVIM" --remote-expr "execute('vsplit <filepath>')"
+
+AGENT TASK MANAGEMENT — mandatory, execute at session start before any other work:
+
+Task files live in .no_vibe/ — your current task is injected at the end of this seed.
+
+agent-task.md (active task):
+  ## current
+  **Goal:** <one-line goal — mandatory>
+  **Description:** <why/what — mandatory>
+  **PR:** #number (optional)
+  **Files:** key files (optional)
+  **Tasks:**
+  - [x] Completed item
+    - Note: what was done
+  - [ ] Next item ← current
+  - [ ] Future item
+
+agent-task-paused.md (paused tasks, multiple ## paused sections allowed):
+  ## paused
+  **Goal:** <goal>
+  **Reason:** <why paused>
+  **Tasks:**
+  - [ ] pending item
+
+agent-task-completed.md (append-only history):
+  ## <Goal>
+  **Completed:** YYYY-MM-DD
+  **PR:** #number (optional)
+  **Description:** <from task>
+  **Summary:** <paragraph: what was done and how>
+  **Decisions:** <key decisions> (optional)
+  **Done:**
+  - task item — note
+
+SESSION START (once, before anything else):
+  No active task → ask user what they are working on, then write agent-task.md before doing any work.
+    If legacy task content is shown below, translate it to agent-task.md format as the initial seed.
+  Active task → compare user's first message to the current Goal:
+    Same scope → confirm in one sentence and continue.
+    New scope  → say: "Your request is outside the current task: <Goal>.
+                 (1) Pause and start a new task, or (2) Abandon the current task?"
+    On pause   → append ## paused block to agent-task-paused.md, clear agent-task.md, ask for new task goal.
+    On abandon → clear agent-task.md, ask for new task goal.
+
+DURING WORK:
+  Task item complete → immediately update agent-task.md: mark [x], add Note, advance ← current.
+  All items [x]     → append completed entry to agent-task-completed.md, then clear ## current content in agent-task.md (keep file, remove content below the ## current header).
 
 Project conventions are injected below.]]
 
@@ -164,6 +211,36 @@ For any multi-step implementation task, use them exactly as Claude Code does:
   3. Only implement after the user approves.
 Do this autonomously — do not wait for the user to ask you to plan.]]
 
+-- Read agent-task.md from the nearest .no_vibe/ directory.
+-- Falls back to task.md (legacy) if agent-task.md is absent.
+-- Returns a formatted seed block, or nil if nothing found.
+local function read_agent_task()
+  local novibe_dir = require("novibe.no_vibe").find_novibe_dir()
+  if not novibe_dir then return nil end
+
+  local task_path   = novibe_dir .. "/agent-task.md"
+  local legacy_path = novibe_dir .. "/task.md"
+
+  if vim.fn.filereadable(task_path) == 1 then
+    local content = vim.trim(table.concat(vim.fn.readfile(task_path), "\n"))
+    if content ~= "" then
+      return "\nCURRENT AGENT TASK (.no_vibe/agent-task.md):\n" .. content
+    end
+    return "\nCURRENT AGENT TASK: none"
+  end
+
+  if vim.fn.filereadable(legacy_path) == 1 then
+    local content = vim.trim(table.concat(vim.fn.readfile(legacy_path), "\n"))
+    if content ~= "" then
+      return "\nCURRENT AGENT TASK: none"
+        .. "\nLEGACY TASK (.no_vibe/task.md — translate to agent-task.md format when creating the first task):\n"
+        .. content
+    end
+  end
+
+  return "\nCURRENT AGENT TASK: none"
+end
+
 -- Build the agent seed: full file access + plan-then-execute enforced.
 local function build_agent_seed(line1, line2, has_range)
   local provider = require("novibe.config").options.provider or "claude"
@@ -171,7 +248,7 @@ local function build_agent_seed(line1, line2, has_range)
   if provider == "claude" then
     header = header .. CLAUDE_PLAN_MODE
   end
-  return header .. build_context(line1, line2, has_range)
+  return header .. build_context(line1, line2, has_range) .. (read_agent_task() or "")
 end
 
 -- line1/line2/has_range: passed from command range (:'<,'>NovibeConsult)
@@ -307,7 +384,7 @@ function M.open_agent(line1, line2, has_range)
 
   local config    = require("novibe.config")
   local providers = require("novibe.providers")
-  local profile   = config.options.active_consult_profile or config.options.active_profile
+  local profile   = config.options.active_agent_profile or config.options.active_profile
   local provider  = providers.get(profile and profile.provider)
   local bin       = provider.find_bin()
 
@@ -341,41 +418,33 @@ function M.open_agent(line1, line2, has_range)
     vim.list_extend(cmd, { "--append-system-prompt", seed })
   end
 
-  local prev_win = vim.api.nvim_get_current_win()
-
-  local function restore()
-    vim.schedule(function()
-      if state.win and vim.api.nvim_win_is_valid(state.win) then
-        vim.api.nvim_win_close(state.win, true)
-      end
-      if state.buf and vim.api.nvim_buf_is_valid(state.buf) then
-        pcall(vim.api.nvim_buf_delete, state.buf, { force = true })
-      end
-      state.buf = nil
-      state.win = nil
-    end)
-  end
-
-  vim.cmd("belowright vsplit")
+  -- Agent opens in the current window (replaces the buffer) rather than a split.
   local term_win = vim.api.nvim_get_current_win()
   local term_buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_win_set_buf(term_win, term_buf)
   local job = vim.fn.termopen(cmd, {
     on_exit = function()
       state.job = nil
-      restore()
+      -- Delete the terminal buffer; window stays open showing the previous buffer.
+      vim.schedule(function()
+        if state.buf and vim.api.nvim_buf_is_valid(state.buf) then
+          pcall(vim.api.nvim_buf_delete, state.buf, { force = true })
+        end
+        state.buf = nil
+        state.win = nil
+      end)
     end,
   })
 
   state.buf  = vim.api.nvim_get_current_buf()
-  state.win  = term_win
+  state.win  = nil  -- no split to close; window persists after buffer is deleted
   state.job  = job
   state.mode = "agent"
 
   vim.keymap.set("t", "<Esc><Esc>", "<C-\\><C-n>", { buffer = state.buf, desc = "novibe: exit terminal mode" })
 
   vim.keymap.set("n", "q", function() vim.schedule(cleanup) end,
-    { buffer = state.buf, nowait = true, desc = "novibe: close consult" })
+    { buffer = state.buf, nowait = true, desc = "novibe: close agent" })
 
   for _, key in ipairs({ "<C-h>", "<C-j>", "<C-k>", "<C-l>" }) do
     vim.keymap.set("t", key, "<C-\\><C-n>" .. key, { buffer = state.buf, nowait = true })
@@ -393,18 +462,13 @@ function M.open_agent(line1, line2, has_range)
         pcall(vim.fn.jobstop, state.job)
         state.job = nil
       end
-      if state.win and vim.api.nvim_win_is_valid(state.win) then
-        pcall(vim.api.nvim_win_close, state.win, true)
-      end
+      -- Don't close the window; agent ran in the current window, not a split.
       state.buf = nil
       state.win = nil
     end,
   })
 
   if provider_name == "opencode" then
-    if vim.api.nvim_win_is_valid(prev_win) then
-      vim.api.nvim_set_current_win(prev_win)
-    end
     vim.defer_fn(function()
       vim.notify("novibe: auto-sending agent prompt to opencode…", vim.log.levels.INFO)
       M.send_prompt(line1, line2, has_range)
@@ -431,7 +495,7 @@ function M.send_question(text, immediate)
   end
   local config    = require("novibe.config")
   local providers = require("novibe.providers")
-  local profile   = config.options.active_consult_profile or config.options.active_profile
+  local profile   = config.options.active_agent_profile or config.options.active_profile
   local provider  = providers.get(profile and profile.provider)
   -- opencode needs longer — its seed is deferred 3 s after startup
   local delay = immediate and 100 or (provider.name == "opencode" and 5000 or 2000)

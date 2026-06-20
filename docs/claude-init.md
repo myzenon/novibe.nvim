@@ -17,7 +17,7 @@ Files, in load order:
 1. `NO_VIBE.md` — single-file shortcut at project root (optional)
 2. `.no_vibe/convention-*.md` — human-written rules. Any number of files, named freely after `convention-`. Split however suits the project (by topic, layer, ownership — your call).
 3. `.no_vibe/learned-*.md` — auto-distilled by `:NovibeDistill` from `#teach` diffs. Do NOT hand-edit these.
-4. `.no_vibe/map-*.md` — dependency graphs: call chains, inheritance, who depends on what.
+4. `.no_vibe/doc-*.md` — project documentation: how features work, call chains, module descriptions, structural knowledge.
 5. `.no_vibe/rule-*.md` — behavioral constraints: how to interact with each area (e.g. "always use Class X as db proxy").
 6. `.no_vibe/decision-*.md` — architectural ADRs: the why behind decisions and rejected alternatives.
 
@@ -48,7 +48,7 @@ Write the file directly. Do not explain it, do not summarize — just write it.
 
 If the project has non-obvious structural knowledge worth preserving (key dependency chains, proxy classes, architectural decisions), create one or more knowledge base files:
 
-- `.no_vibe/map-<area>.md` — structural: who calls what, inheritance chains
+- `.no_vibe/doc-<area>.md` — project documentation: how features work, call chains, module descriptions
 - `.no_vibe/rule-<area>.md` — behavioral: constraints on how to interact with an area
 - `.no_vibe/decision-<area>.md` — reasoning: why something was built this way, what was rejected
 
@@ -68,11 +68,11 @@ After completing the above steps, tell the user about the three loops they'll us
 
 **Growing the knowledge base (`:NovibeConsult` + "snapshot")**
 - Open a consult session with `:NovibeConsult`. Explore the codebase, ask questions, investigate dependencies.
-- Say **"snapshot"** whenever you discover something worth keeping. The AI writes it to the right `map-*`, `rule-*`, or `decision-*` file with the current commit hash for staleness tracking.
+- Say **"snapshot"** whenever you discover something worth keeping. The AI writes it to the right `doc-*`, `rule-*`, or `decision-*` file with the current commit hash for staleness tracking.
 - The knowledge base grows lazily as you touch areas — no need to document everything upfront.
 
 **Switching models (`:NovibeProfile`)**
-- Run `:NovibeProfile` to open a two-step picker: choose a slot (Act or Consult), then a profile. Each slot persists independently.
+- Run `:NovibeProfile` to open a two-step picker: choose a slot (Act, Consult, or Agent), then a profile. Each slot persists independently.
 - Profiles are defined in your `setup()` call with `provider`, `model`, and `effort`. No active profile = CLI defaults.
 - Use a fast/cheap profile for routine fills and a powerful profile for complex consult sessions.
 

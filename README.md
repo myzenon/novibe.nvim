@@ -171,12 +171,13 @@ No auto-apply — you save each file yourself, so hallucinated paths never silen
 | `:NovibeAct`         | Fill selection (or current line) · `#teach <reason>` to capture style evidence |
 | `:NovibeAct2`        | Fill in-place with virt_line review controls — no chat window. `<CR>` accept · `U` undo · `<leader>r` re-prompt · `<leader>t` teach · `<leader>o` peek changes. `#ask <question>` opens Consult instead |
 | `:NovibeGen`         | Generate new files — prompt if no pending files, list if pending. `<C-f>` change path · `<leader>r` re-prompt · `:w` save |
-| `:NovibeConsult`     | Open interactive consult session (vsplit); claude / gemini / codex: context auto-injected; opencode: manual. `q` closes in normal mode |
+| `:NovibeConsult`     | Open interactive advisory session in a vsplit; claude / gemini / codex: context auto-injected; opencode: manual. `q` closes in normal mode |
 | `:NovibeConsultPrompt` | Push consult seed into the active consult terminal (required for opencode; works with any provider) |
-| `:NovibeProfile`     | Two-step picker: choose slot (Act / Consult), then profile   |
+| `:NovibeAgent`       | Open full-access agent session replacing the current buffer; mandatory task tracking via `.no_vibe/agent-task.md` |
+| `:NovibeProfile`     | Two-step picker: choose slot (Act / Consult / Agent), then profile |
 | `:NovibeReset`       | Start a fresh session on the next fill                       |
 | `:NovibeStatus`      | Show profile, session, cost, ctx %, loaded rule files        |
-| `:NovibeKB`          | Browse all `.no_vibe` files by category (convention, learn, map, rule, decision) |
+| `:NovibeKB`          | Browse all `.no_vibe` files by category (convention, learn, doc, rule, decision) |
 | `:NovibeDistill`     | Force `#teach` distillation now                              |
 | `:NovibePromote`     | Review mature learned rules and graduate them to conventions |
 | `:NovibeActReviewFocus` | Focus the active fill-preview chat window (useful when in insert mode) |

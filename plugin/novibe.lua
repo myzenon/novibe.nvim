@@ -70,6 +70,7 @@ vim.api.nvim_create_user_command("NovibeProfile", function()
   local slots = {
     { key = "active_profile",         label = "Act",     prompt = "Act profile" },
     { key = "active_consult_profile", label = "Consult", prompt = "Consult profile" },
+    { key = "active_agent_profile",   label = "Agent",   prompt = "Agent profile" },
   }
   vim.ui.select(slots, {
     prompt = "Novibe: configure profile for…",

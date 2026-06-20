@@ -166,7 +166,7 @@ novibe loads rules from these sources (in order):
 1. `NO_VIBE.md` at project root — optional single-file shortcut
 2. `.no_vibe/convention-*.md` — human-written rules. Any number of files, named freely after `convention-`. Split however suits you (by topic, layer, ownership).
 3. `.no_vibe/learned-*.md` — auto-distilled from `#teach` (don't edit by hand)
-4. `.no_vibe/map-*.md` — dependency graph: call chains, inheritance, who depends on what
+4. `.no_vibe/doc-*.md` — project documentation: how features work, call chains, module descriptions
 5. `.no_vibe/rule-*.md` — behavioral constraints: how to interact with each area
 6. `.no_vibe/decision-*.md` — architectural ADRs: the why behind decisions and rejected alternatives
 
@@ -182,7 +182,7 @@ NO_VIBE.md                ← optional single-file shortcut
   convention-me.md        ← personal preferences (gitignore this)
   learned-style.md        ← auto-distilled (don't edit)
   learned-react.md        ← auto-distilled (don't edit)
-  map-auth.md             ← knowledge base: call graph for auth area
+  doc-auth.md             ← knowledge base: how the auth flow works
   rule-db.md              ← knowledge base: always use Class X as db proxy
   decision-api.md         ← knowledge base: why REST over GraphQL
   diffs.json              ← transient working state (gitignore this)
