@@ -36,7 +36,7 @@ function M.parse_chunk(data)
   return table.concat(parts)
 end
 
--- opts: { profile, bare, stream }
+-- opts: { profile, bare, stream, use_continue, session_id }
 function M.build_cmd(bin, prompt, opts)
   local cmd = { bin }
   if opts.bare then table.insert(cmd, "--bare") end
@@ -45,6 +45,13 @@ function M.build_cmd(bin, prompt, opts)
   end
   if opts.profile and opts.profile.effort then
     vim.list_extend(cmd, { "--effort", opts.profile.effort })
+  end
+  if opts.use_continue then
+    if opts.session_id and opts.session_id ~= "" then
+      vim.list_extend(cmd, { "--resume", opts.session_id })
+    else
+      table.insert(cmd, "--continue")
+    end
   end
   if opts.stream then
     vim.list_extend(cmd, { "--output-format", "stream-json", "--include-partial-messages", "--verbose", "--print", prompt })
@@ -85,7 +92,7 @@ local function parse_envelope(outer)
     input_tokens   = outer.usage and outer.usage.input_tokens,
     output_tokens  = outer.usage and outer.usage.output_tokens,
     context_window = nil,
-    session_id     = nil,
+    session_id     = outer.session_id,
   }
   if outer.modelUsage then
     for _, mu in pairs(outer.modelUsage) do

@@ -2,9 +2,9 @@ local M = {}
 
 ---@class novibe.Profile
 ---@field label string Display name shown in :NovibeProfile picker
----@field provider? "claude"|"opencode"|"gemini"|"codex" CLI provider; defaults to "claude"
+---@field provider? "claude"|"opencode"|"codex"|"antigravity" CLI provider; defaults to "claude"
 ---@field model? string Model identifier (claude alias like "haiku" or full ID; opencode uses "provider/model" format)
----@field effort? "minimal"|"low"|"medium"|"high"|"xhigh"|"max" Reasoning effort (claude --effort / opencode --variant / codex model_reasoning_effort; ignored by gemini; "minimal" is codex-only)
+---@field effort? "minimal"|"low"|"medium"|"high"|"xhigh"|"max" Reasoning effort (claude --effort / opencode --variant / codex model_reasoning_effort; "minimal" is codex-only)
 ---@field file_context? boolean Inject sibling files + parsed imports into the prompt for better grounding. Recommended for cheaper / less reliable models. Defaults to false.
 
 ---@class novibe.LearnConfig

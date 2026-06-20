@@ -3,7 +3,6 @@ local M = {}
 local providers = {
   claude       = require("novibe.providers.claude"),
   opencode     = require("novibe.providers.opencode"),
-  gemini       = require("novibe.providers.gemini"),
   codex        = require("novibe.providers.codex"),
   antigravity  = require("novibe.providers.antigravity"),
 }

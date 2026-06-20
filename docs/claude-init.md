@@ -82,7 +82,7 @@ Finally, tell the user:
 
 ## Step 5 — Optional: session task tracking
 
-Ask the user: "Would you like to enable task tracking? This keeps a running note of your current state injected into every novibe prompt — so you never lose context when switching machines or tools, or when hitting a Claude rate limit and continuing in opencode or gemini."
+Ask the user: "Would you like to enable task tracking? This keeps a running note of your current state injected into every novibe prompt — so you never lose context when switching machines or tools, or when hitting a Claude rate limit and continuing in opencode or codex."
 
 If the user says yes, interview them with these questions before writing anything:
 

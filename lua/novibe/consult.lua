@@ -274,11 +274,6 @@ function M.open(line1, line2, has_range)
   if provider_name == "opencode" then
     -- opencode TUI has no flag for pre-seeding context; user types it manually
     cmd = { bin }
-  elseif provider_name == "gemini" then
-    -- --prompt-interactive seeds context then stays in interactive TUI mode
-    cmd = { bin }
-    if profile and profile.model then vim.list_extend(cmd, { "--model", profile.model }) end
-    vim.list_extend(cmd, { "--prompt-interactive", seed })
   elseif provider_name == "antigravity" then
     cmd = { bin }
     if profile and profile.model then vim.list_extend(cmd, { "--model", profile.model }) end
@@ -399,10 +394,6 @@ function M.open_agent(line1, line2, has_range)
   local cmd
   if provider_name == "opencode" then
     cmd = { bin }
-  elseif provider_name == "gemini" then
-    cmd = { bin }
-    if profile and profile.model then vim.list_extend(cmd, { "--model", profile.model }) end
-    vim.list_extend(cmd, { "--prompt-interactive", seed })
   elseif provider_name == "antigravity" then
     cmd = { bin }
     if profile and profile.model then vim.list_extend(cmd, { "--model", profile.model }) end

@@ -183,7 +183,7 @@ Filenames must match: learned-<topic>.md]],
 
     -- Distill expects a filename→content map, not the novibe schema.
     -- Parse independently: strip any prose before/after JSON, unwrap the
-    -- provider envelope (claude: outer.result, gemini: outer.response),
+    -- provider envelope (claude: outer.result),
     -- strip markdown fences.
     local raw = vim.trim(result.stdout or "")
     local first = raw:find("{")

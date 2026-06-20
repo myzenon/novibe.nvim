@@ -2,7 +2,7 @@
 
 > _"No vibe, just smart auto completion."_
 
-A minimal Neovim plugin that uses your AI coding CLI ([Claude Code](https://claude.ai/code), [opencode](https://opencode.ai/), [Gemini CLI](https://geminicli.com/), or [OpenAI Codex](https://github.com/openai/codex)) as a **code fulfillment tool, not a vibe coder**.
+A minimal Neovim plugin that uses your AI coding CLI ([Claude Code](https://claude.ai/code), [opencode](https://opencode.ai/), [OpenAI Codex](https://github.com/openai/codex), or [Antigravity](https://antigravity.dev)) as a **code fulfillment tool, not a vibe coder**.
 
 You design the structure. You write the skeleton — function signature, comments describing intent and algorithm. The model fills the implementation within your boundaries. You already understand the code because you designed it.
 
@@ -17,7 +17,7 @@ You design the structure. You write the skeleton — function signature, comment
 ## Requirements
 
 - Neovim 0.10+
-- One of: [Claude Code CLI](https://claude.ai/code) (`claude login`), [opencode](https://opencode.ai/) (`opencode auth login`), [Gemini CLI](https://geminicli.com/) (`gemini auth`), or [OpenAI Codex](https://github.com/openai/codex) (`codex login`)
+- One of: [Claude Code CLI](https://claude.ai/code) (`claude login`), [opencode](https://opencode.ai/) (`opencode auth login`), [OpenAI Codex](https://github.com/openai/codex) (`codex login`), or [Antigravity](https://antigravity.dev) (`agy`)
 - [lazy.nvim](https://github.com/folke/lazy.nvim)
 - [snacks.nvim](https://github.com/folke/snacks.nvim) — file picker (`<C-f>`) in the input float
 
@@ -40,9 +40,9 @@ You design the structure. You write the skeleton — function signature, comment
         { label = "Claude Best",  provider = "claude",   model = "opus",                       effort = "max"  },
         { label = "OC DeepSeek",  provider = "opencode", model = "opencode-go/deepseek-v4-pro", effort = "high", file_context = false },
         { label = "OC Qwen",      provider = "opencode", model = "opencode-go/qwen3.6-plus",    effort = "high", file_context = true },
-        { label = "Gemini Flash", provider = "gemini",   model = "gemini-2.0-flash" },
-        { label = "Codex o4",     provider = "codex",    model = "o4-mini", effort = "high" },
-        -- Run `opencode models` or check `/model` in `gemini`/`codex` for available models. See docs/config.md.
+        { label = "Codex o4",     provider = "codex",       model = "o4-mini",                    effort = "high" },
+        { label = "Antigravity",  provider = "antigravity", model = "Claude Sonnet 4.6 (Thinking)"                },
+        -- Run `opencode models` or `agy models` or check available models in `codex`. See docs/config.md.
       },
     })
   end,
@@ -59,10 +59,9 @@ Bootstrap your project conventions by running your AI CLI in the project root:
 
 - **Claude Code** — start `claude`, then paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/docs/claude-init.md and follow the instructions."`
 - **opencode** — start `opencode`, then paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/docs/opencode-init.md and follow the instructions."`
-- **Gemini CLI** — start `gemini`, trust the workspace when prompted, then paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/docs/gemini-init.md and follow the instructions."`
 - **Codex** — start `codex`, then paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/docs/codex-init.md and follow the instructions."`
 
-The agent analyzes your project, generates `.no_vibe/convention-project.md`, and writes the novibe format spec into `CLAUDE.md` (claude) / `AGENTS.md` (opencode, codex) / `GEMINI.md` (gemini) so it auto-loads in future sessions.
+The agent analyzes your project, generates `.no_vibe/convention-project.md`, and writes the novibe format spec into `CLAUDE.md` (claude) / `AGENTS.md` (opencode, codex) so it auto-loads in future sessions.
 
 See [docs/config.md → Fresh project setup](./docs/config.md#fresh-project-setup) for details.
 
@@ -171,7 +170,7 @@ No auto-apply — you save each file yourself, so hallucinated paths never silen
 | `:NovibeAct`         | Fill selection (or current line) · `#teach <reason>` to capture style evidence |
 | `:NovibeAct2`        | Fill in-place with virt_line review controls — no chat window. `<CR>` accept · `U` undo · `<leader>r` re-prompt · `<leader>t` teach · `<leader>o` peek changes. `#ask <question>` opens Consult instead |
 | `:NovibeGen`         | Generate new files — prompt if no pending files, list if pending. `<C-f>` change path · `<leader>r` re-prompt · `:w` save |
-| `:NovibeConsult`     | Open interactive advisory session in a vsplit; claude / gemini / codex: context auto-injected; opencode: manual. `q` closes in normal mode |
+| `:NovibeConsult`     | Open interactive advisory session in a vsplit; claude / codex / antigravity: context auto-injected; opencode: manual via `:NovibeConsultPrompt`. `q` closes in normal mode |
 | `:NovibeConsultPrompt` | Push consult seed into the active consult terminal (required for opencode; works with any provider) |
 | `:NovibeAgent`       | Open full-access agent session replacing the current buffer; mandatory task tracking via `.no_vibe/agent-task.md` |
 | `:NovibeProfile`     | Two-step picker: choose slot (Act / Consult / Agent), then profile |

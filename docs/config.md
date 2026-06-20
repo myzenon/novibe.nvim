@@ -30,11 +30,6 @@ The fastest way to bootstrap conventions is to ask your AI CLI to do it:
 2. Paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/docs/opencode-init.md and follow the instructions."`
 3. The agent generates `.no_vibe/convention-project.md` and appends the novibe format spec to `AGENTS.md`.
 
-**Gemini CLI:**
-1. Open a terminal in your project root: `gemini` (trust the workspace when prompted)
-2. Paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/docs/gemini-init.md and follow the instructions."`
-3. The agent generates `.no_vibe/convention-project.md` and appends the novibe format spec to `GEMINI.md`.
-
 **OpenAI Codex:**
 1. Open a terminal in your project root: `codex`
 2. Paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/docs/codex-init.md and follow the instructions."`
@@ -60,10 +55,6 @@ require("novibe").setup({
     { label = "OC Sonnet", provider = "opencode", model = "anthropic/claude-sonnet-4-5", effort = "high" },
     { label = "OC GPT-5",  provider = "opencode", model = "openai/gpt-5",                effort = "medium" },
 
-    -- Gemini CLI (no effort/variant equivalent)
-    { label = "Gemini Flash", provider = "gemini", model = "gemini-2.0-flash" },
-    { label = "Gemini Pro",   provider = "gemini", model = "gemini-2.5-pro" },
-
     -- OpenAI Codex (effort maps to model_reasoning_effort config key)
     { label = "Codex o4-mini", provider = "codex", model = "o4-mini", effort = "high" },
     { label = "Codex o3",      provider = "codex", model = "o3",      effort = "xhigh" },
@@ -75,7 +66,7 @@ Switching profiles via `:NovibeProfile` swaps everything atomically. LazyVim wit
 
 ### Fields
 
-**`provider`** — `"claude"` (default if omitted), `"opencode"`, `"gemini"`, or `"codex"`.
+**`provider`** — `"claude"` (default if omitted), `"opencode"`, `"codex"`, or `"antigravity"`.
 
 **`model`** — full model ID or alias accepted by the active provider's CLI.
 
@@ -89,8 +80,6 @@ For **Claude**:
 
 For **opencode**: use `provider/model` format. Run `opencode models` to list everything available, e.g. `anthropic/claude-sonnet-4-5`, `openai/gpt-5`, `google/gemini-2.5-pro`.
 
-For **Gemini CLI**: full model ID, e.g. `gemini-2.0-flash`, `gemini-2.5-pro`. Check `/model` in an interactive `gemini` session to see what's available.
-
 For **Codex**: model ID, e.g. `o4-mini`, `o3`. Check available models in an interactive `codex` session.
 
 **`file_context`** — `true` injects sibling files (same directory) and parsed imports from the current buffer into the prompt as a "Project files" list. The model is instructed to only reference these paths in `changes[]`. Defaults to `false`.
@@ -101,7 +90,7 @@ Recommended for cheaper / less reliable models that tend to hallucinate file pat
 { label = "OC GPT-5", provider = "opencode", model = "openai/gpt-5", effort = "high", file_context = true }
 ```
 
-**`effort`** — Claude maps to `--effort`, opencode maps to `--variant`, Codex maps to `-c model_reasoning_effort=<value>`. Gemini has no equivalent and ignores this field.
+**`effort`** — Claude maps to `--effort`, opencode maps to `--variant`, Codex maps to `-c model_reasoning_effort=<value>`. Antigravity has no equivalent and ignores this field.
 
 | Level | Notes |
 |---|---|
@@ -117,11 +106,11 @@ Recommended for cheaper / less reliable models that tend to hallucinate file pat
 
 ## Provider differences
 
-All four providers are first-class. novibe normalizes most of the differences (session continuity, JSON output, usage stats), but a few CLI quirks surface in the UI. Knowing them helps you read the status line and pick the right `effort` level.
+All providers are first-class. novibe normalizes most of the differences (session continuity, JSON output, usage stats), but a few CLI quirks surface in the UI. Knowing them helps you read the status line and pick the right `effort` level.
 
 ### Claude Code
 
-- **`--continue`** is used to carry session context across fills. `:NovibeReset` skips it on the next fill.
+- **Session continuity**: first fill uses `--continue` (most recent session); subsequent fills use `--resume <session_id>` (precise UUID extracted from the response). `:NovibeReset` skips continuity on the next fill.
 - **`--bare`** mode is supported (set `bare = true` in `setup()` if you auth via `ANTHROPIC_API_KEY`).
 - **Context window %** is reported by the CLI and shown in the input title / chat winbar / lualine.
 - **`--effort`** levels: `low`, `medium`, `high`, `xhigh` (Opus only), `max`.
@@ -135,16 +124,6 @@ All four providers are first-class. novibe normalizes most of the differences (s
 - **Tools / default agent**: opencode's default `build` agent has tool access. novibe's strict JSON system prompt usually keeps the model from invoking tools, but if you see file edits happening outside the review flow, configure a no-tools agent (see `opencode agent`) and reference it as your default.
 - **Hallucinated paths**: cheaper models on opencode are more prone to inventing file paths in `changes[]`. Set `file_context = true` on the profile to inject a "Project files" allow-list — see [Profiles → fields](#fields).
 
-### Gemini CLI
-
-- **Sessions**: novibe captures `session_id` from the first response and reuses it via `--session-id UUID`. Mirrors Claude's `--continue` UX. `:NovibeReset` clears it.
-- **`bare` mode**: silently ignored — Claude-only.
-- **`effort` / `--variant`**: no equivalent — Gemini CLI has no reasoning effort flag, so the `effort` field is ignored.
-- **Workspace trust**: Gemini requires the workspace to be trusted before non-interactive runs work. The cleanest way is to run `gemini` interactively in your project once and trust the directory, or set `GEMINI_CLI_TRUST_WORKSPACE=true` in your environment.
-- **Cost**: not reported by the CLI (free tier).
-- **Context window %**: not exposed — Gemini CLI doesn't report context window size.
-- **Consult**: context is injected via `--prompt-interactive` (gemini's equivalent of claude's `--append-system-prompt`).
-
 ### OpenAI Codex
 
 - **Sessions**: novibe captures `thread_id` from the first response and reuses it via `codex exec resume <thread_id>` for follow-up fills. `:NovibeReset` clears it.
@@ -156,6 +135,16 @@ All four providers are first-class. novibe normalizes most of the differences (s
 - **Cost**: not reported by the CLI.
 - **Context window %**: not exposed.
 - **Consult**: seed is passed as the initial prompt positional argument (`codex "seed"`), which starts the interactive TUI with context pre-loaded.
+
+### Antigravity
+
+- **Sessions**: `--continue` resumes the most recent conversation for the cwd. novibe passes it on every fill after the first. `:NovibeReset` skips it.
+- **Non-streaming**: stdout is raw AI response text (no JSON wrapper). Fill-preview split appears complete when the response arrives.
+- **`bare` / `effort`**: no equivalent — both ignored.
+- **Model**: set via `--model "<display name>"` (run `agy models` to list). Note: `agy` is a compiled binary — if `agy --help` shows a shell script header, you have the desktop editor wrapper instead of the CLI.
+- **System prompt**: prepended to the user prompt inside `<instructions>` tags (no CLI injection flag).
+- **Consult**: context injected via `--prompt-interactive` (starts interactive session with seed pre-submitted).
+- **Cost / context window %**: not reported by the CLI.
 
 ---
 
@@ -366,8 +355,8 @@ Write skeleton → visual select → <leader>aa  (or #gen for new files)
                   + LSP diagnostics for the selection range
                   + your instruction
                                       ↓
-          provider.build_cmd() → claude / opencode / gemini  (streaming)
-                                   codex                    (non-streaming)
+          provider.build_cmd() → claude / opencode  (streaming)
+                                   codex / antigravity (non-streaming)
                                       ↓
               fill-preview split opens immediately (right vsplit, no focus steal)
               partial code streams into the split as chunks arrive

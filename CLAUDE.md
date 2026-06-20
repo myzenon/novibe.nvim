@@ -15,7 +15,7 @@ CLAUDE.md stays current via the dev loop; the others need explicit checking when
 
 ## What This Plugin Does
 
-`novibe.nvim` is a minimal Neovim plugin for LazyVim. The user writes function skeletons (signatures + descriptive comments), visually selects them, and invokes the plugin. The selection is sent to the active AI CLI (Claude Code, opencode, gemini, codex, or antigravity) and streamed into a **fill-preview chat split**. `<CR>` applies in-scope code, then any out-of-scope changes (imports, types, other files) are reviewed one at a time.
+`novibe.nvim` is a minimal Neovim plugin for LazyVim. The user writes function skeletons (signatures + descriptive comments), visually selects them, and invokes the plugin. The selection is sent to the active AI CLI (Claude Code, opencode, codex, or antigravity) and streamed into a **fill-preview chat split**. `<CR>` applies in-scope code, then any out-of-scope changes (imports, types, other files) are reviewed one at a time.
 
 **Philosophy:** the user is the architect. AI fills boilerplate within user-defined boundaries; it never makes architectural decisions.
 
@@ -42,7 +42,7 @@ lua/novibe/
   promote.lua  — :NovibePromote — graduate mature rules (n≥3) into convention files
   consult.lua  — :NovibeConsult (vsplit advisory) + :NovibeAgent (replaces current buffer, full-access):
                  both seed file/line/selection/conventions; Agent also injects agent-task.md state
-  providers/   — claude.lua, opencode.lua, gemini.lua, codex.lua, antigravity.lua: find_bin,
+  providers/   — claude.lua, opencode.lua, codex.lua, antigravity.lua: find_bin,
                  build_cmd, parse_output, parse_chunk, streaming
 plugin/novibe.lua — guard + user commands
 ```
@@ -161,8 +161,8 @@ Act2 always passes `use_continue = false`. Each fill is a fresh session — no `
   - `#teach <reason>` → accumulate evidence (diff if editing a recent fill, else note)
 - `:NovibeGen` — generate new files from a description. Empty pending → input prompt → AI generates → populate pending list. Non-empty pending → show picker (one batch at a time). Each file opens as a real listed buffer named with the proposed path; winbar shows path + keys. `<C-f>` opens input float pre-filled with current path to change it. `<leader>r` re-prompts pre-filled with last description. `:w` saves to the path in the buffer name. `BufWritePost`/`BufWipeout` remove entry from pending. No `apply.lua` — user saves manually. Single proposed file → opens directly; multiple → picker first.
 - `:NovibeAct2` — alternative no-chat-window fill. AI code is written directly into the buffer; virt_lines above/below the scope show review controls (`<CR>` accept, `U` undo, `<leader>r` re-prompt, `<leader>t` teach, `<leader>o` peek out-of-scope changes). Review bar shows `<leader>o peek (N)` only when changes[] is non-empty. If AI returns no code, `vim.notify` the message and exit (no virt_lines). `#ask <question>` in the input float skips fill and opens a Consult session with context + question pre-seeded. Keys are cursor-guarded (only fire when cursor is inside scope). Two-phase `<leader>t` teach: first press accepts + enters edit mode, second press captures the diff and opens a reason float. Session is always fresh (no `--continue`). All keys configurable via `setup({ act2 = { keys = {...} } })`.
-- `:NovibeConsult` — singleton interactive session in a vsplit. Process dies with buffer; `<Esc><Esc>` exits terminal mode; `q` in normal mode closes the window; range injects selection. Seed = file, line, current commit hash, matched `.no_vibe` sections, snapshot instructions. Injected via `--append-system-prompt` (claude) or `--prompt-interactive` (gemini). AI may freely edit `CLAUDE.md` and `.no_vibe/*.md`; all other files off-limits. Say **"snapshot"** mid-session to persist discoveries. **opencode workaround:** no flag exists, so use `:NovibeConsultPrompt` after opening — the seed is `chansend`-ed into the input box; press Enter to submit.
-- `:NovibeConsultPrompt` — build the consult seed from current buffer/selection and chansend it into the active consult terminal. Required for opencode; optional refresh for claude/gemini/codex. Invoke from the source buffer, not the consult terminal.
+- `:NovibeConsult` — singleton interactive session in a vsplit. Process dies with buffer; `<Esc><Esc>` exits terminal mode; `q` in normal mode closes the window; range injects selection. Seed = file, line, current commit hash, matched `.no_vibe` sections, snapshot instructions. Injected via `--append-system-prompt` (claude) or `--prompt-interactive` (antigravity). AI may freely edit `CLAUDE.md` and `.no_vibe/*.md`; all other files off-limits. Say **"snapshot"** mid-session to persist discoveries. **opencode workaround:** no flag exists, so use `:NovibeConsultPrompt` after opening — the seed is `chansend`-ed into the input box; press Enter to submit.
+- `:NovibeConsultPrompt` — build the consult seed from current buffer/selection and chansend it into the active consult terminal. Required for opencode; optional refresh for claude/codex/antigravity. Invoke from the source buffer, not the consult terminal.
 - `:NovibeAgent` — singleton full-access agent session; **replaces the current buffer** (not a vsplit). Full read/write project access. Mandatory task management via `.no_vibe/agent-task.md` — current task is injected into the seed. Uses `active_agent_profile` (independent of Act/Consult slots).
 - `:NovibeProfile` — two-step picker: slot (Act / Consult / Agent) then profile. Slots persist independently. No profile = CLI defaults.
 - `:NovibeDistill` — distill accumulated `#teach` diffs into `.no_vibe/learned-*.md` (AI decides the topic split).
@@ -193,13 +193,15 @@ Common flags across providers — only the relevant lines shown.
 **Claude** (`provider = "claude"`):
 ```lua
 -- streaming default (providers/claude.lua sets M.streaming = true):
-{ claude_bin, "--continue", "--output-format", "stream-json",
+{ claude_bin, "--output-format", "stream-json",
   "--include-partial-messages", "--verbose", "--print", prompt }
 -- + "--model", profile.model, "--effort", profile.effort   (when profile active)
 -- + "--bare"                                                (when config.bare = true)
+-- + "--resume", session_id                                  (when session_id known from prior fill)
+-- + "--continue"                                            (first fill of a new session)
 -- non-streaming fallback: "--output-format", "json"
 ```
-`--continue` carries session context. `--bare` skips hooks/plugins/memory (safe only with `ANTHROPIC_API_KEY`, not `claude login`). Streaming: `parse_chunk` extracts `content_block_delta` text-deltas; `parse_output` scans for the final `type=="result"` line.
+Session continuity: `--resume <session_id>` resumes a specific session (session_id extracted from the `type=="result"` event); `--continue` resumes the most recent session when no session_id exists yet. `--bare` skips hooks/plugins/memory (safe only with `ANTHROPIC_API_KEY`, not `claude login`). Streaming: `parse_chunk` extracts `content_block_delta` text-deltas; `parse_output` scans for the final `type=="result"` line and reads `outer.session_id`.
 
 **opencode** (`provider = "opencode"`):
 ```lua
@@ -208,15 +210,6 @@ Common flags across providers — only the relevant lines shown.
 -- + "--session", session_id                                  (carries continuity)
 ```
 No `--continue`; pass back the `sessionID` from the previous response as `--session`. No `--bare`.
-
-**gemini** (`provider = "gemini"`):
-```lua
-{ gemini_bin, "--output-format", "stream-json", "--prompt", prompt }
--- + "--model", profile.model                                 (when profile active)
--- + "--session-id", session_id                                (carries continuity)
--- non-streaming fallback: "--output-format", "json"
-```
-No `--continue` (use `--session-id` with the prev response's UUID). No effort/variant equivalent. No `--bare`. Workspace must be trusted — run `gemini` once interactively or set `GEMINI_CLI_TRUST_WORKSPACE=true`. Streaming: `parse_chunk` extracts assistant `delta=true` events.
 
 **codex** (`provider = "codex"`):
 ```lua
@@ -245,7 +238,6 @@ Non-streaming: stdout is the raw AI response text (no JSON wrapper). `parse_outp
 ```lua
 { claude_bin,   "--append-system-prompt", seed }  -- + optional --model / --effort
 { opencode_bin }                                   -- no seed flag; use NovibeConsultPrompt
-{ gemini_bin,   "--prompt-interactive",   seed }  -- + optional --model
 { codex_bin,    seed }                             -- seed as initial prompt positional arg
 { agy_bin,      "--prompt-interactive",   seed }  -- + optional --model
 ```
@@ -257,25 +249,22 @@ User-defined in `setup()`. No defaults — must be explicit. No active profile =
 ```lua
 require("novibe").setup({
   profiles = {
-    { label = "Claude Best",  provider = "claude",   model = "claude-opus-4-7",             effort = "max"  },
-    { label = "Claude Fast",  provider = "claude",   model = "claude-haiku-4-5-20251001",   effort = "low"  },
-    { label = "OC DeepSeek",  provider = "opencode", model = "opencode-go/deepseek-v4-pro", effort = "high" },
-    { label = "Gemini Flash", provider = "gemini",   model = "gemini-2.0-flash"                             },
+    { label = "Claude Best",  provider = "claude",      model = "claude-opus-4-7",             effort = "max"  },
+    { label = "Claude Fast",  provider = "claude",      model = "claude-haiku-4-5-20251001",   effort = "low"  },
+    { label = "OC DeepSeek",  provider = "opencode",    model = "opencode-go/deepseek-v4-pro", effort = "high" },
     { label = "Codex o4",     provider = "codex",       model = "o4-mini"                                      },
     { label = "Antigravity",  provider = "antigravity", model = "Claude Sonnet 4.6 (Thinking)"                 },
   }
 })
 ```
 
-- `provider`: `"claude"` (default) | `"opencode"` | `"gemini"` | `"codex"` | `"antigravity"`
+- `provider`: `"claude"` (default) | `"opencode"` | `"codex"` | `"antigravity"`
 - `effort` (claude): `low`/`medium`/`high`/`xhigh`/`max` → `--effort`
 - `effort` (opencode): maps to `--variant` (values depend on model)
 - `effort` (codex): maps to `-c model_reasoning_effort=<value>`; `max` → `xhigh`; values: `minimal|low|medium|high|xhigh`
-- `effort` (gemini): ignored (no CLI flag equivalent)
 - `effort` (antigravity): ignored (no CLI flag equivalent)
 - `model` (claude): full ID (`claude-sonnet-4-6`) or alias (`sonnet`, `opus`)
 - `model` (opencode): `"provider/model"` (run `opencode models`)
-- `model` (gemini): full ID (run `gemini`, check `/model` in TUI)
 - `model` (codex): model ID (e.g. `o4-mini`, `o3`); run `codex` and check available models
 - `model` (antigravity): display name string (run `agy models`; e.g. `"Claude Sonnet 4.6 (Thinking)"`) → `--model`
 
