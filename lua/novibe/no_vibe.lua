@@ -41,7 +41,7 @@ local function parse_file(path, filename, matched)
   end
 
   for _, line in ipairs(lines) do
-    local header = line:match("^##%s*(.+)$")
+    local header = line:match("^##%s+(.+)$")
     if header then
       flush()
       cur_header = vim.trim(header)
@@ -88,7 +88,7 @@ local function parse_config(path, mode, matched)
   end
 
   for _, line in ipairs(lines) do
-    local header = line:match("^##%s*(.+)$")
+    local header = line:match("^##%s+(.+)$")
     if header then
       flush()
       cur_header = vim.trim(header)
@@ -125,7 +125,7 @@ local function parse_index(path, filename)
   end
 
   for _, line in ipairs(lines) do
-    local header = line:match("^##%s*(.+)$")
+    local header = line:match("^##%s+(.+)$")
     if header then
       flush()
       header = vim.trim(header)

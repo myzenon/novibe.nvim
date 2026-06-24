@@ -176,12 +176,14 @@ Do this autonomously — do not wait for the user to ask you to plan.]]
 -- Task management behavior (including which files to read at session start) is
 -- defined entirely in the user's .no_vibe/config.md ## Agent section.
 local function build_agent_seed(line1, line2, has_range)
-  local provider = require("novibe.config").options.provider or "claude"
+  local config  = require("novibe.config")
+  local profile = config.options.active_agent_profile or config.options.active_profile
+  local provider_name = (profile and profile.provider) or config.options.provider or "claude"
   local header = AGENT_HEADER
-  if provider == "claude" then
+  if provider_name == "claude" then
     header = header .. CLAUDE_PLAN_MODE
   end
-  return header .. build_context(line1, line2, has_range, "agent")
+  return header .. "\n" .. build_context(line1, line2, has_range, "agent")
 end
 
 -- line1/line2/has_range: passed from command range (:'<,'>NovibeConsult)
