@@ -61,7 +61,7 @@ Bootstrap your project conventions by running your AI CLI in the project root:
 - **opencode** — start `opencode`, then paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/docs/opencode-init.md and follow the instructions."`
 - **Codex** — start `codex`, then paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/docs/codex-init.md and follow the instructions."`
 
-The agent analyzes your project, generates the initial `topics/` knowledge base, and writes the novibe format spec into `CLAUDE.md` (claude) / `AGENTS.md` (opencode, codex) so it auto-loads in future sessions.
+The agent asks two questions — which setup mode you want, and whether to add personal config — then generates the initial `topics/` knowledge base. The init is safe to re-run as the project grows.
 
 See [docs/config.md → Fresh project setup](./docs/config.md#fresh-project-setup) for details.
 

@@ -1,10 +1,20 @@
 # novibe.nvim — Claude onboarding
 
-You are being asked to set up novibe.nvim for this project.
+You are being asked to set up or refresh novibe.nvim for this project.
 
 novibe.nvim is a Neovim plugin that sends code selections to Claude CLI for implementation. It reads project knowledge from `.no_vibe/` and injects matching content into every prompt — so Claude always follows the project's conventions without the user repeating them.
 
-## Step 1 — Add novibe format to CLAUDE.md
+**This init can be run multiple times.** On a re-run, expand and merge — do not overwrite existing content. Add new topic areas you discover, update index.md with new entries, and add doc.md/why.md for areas that have grown. Never replace a rule.md that already has content unless the user explicitly asks.
+
+## Step 1 — Choose your setup mode
+
+Ask the user which mode they want:
+
+> **A — Hybrid**: novibe format is added to `CLAUDE.md` so Claude Code always knows the `.no_vibe/` structure, even in interactive sessions and agent tasks outside of novibe fills. Best when you already use `CLAUDE.md` for project conventions or want the whole team to benefit.
+>
+> **B — Pure novibe**: no `CLAUDE.md` needed. The `.no_vibe/` KB is the single source of truth — novibe injects context at fill time. Any existing team `CLAUDE.md` (if present) handles base CLI behavior only; project conventions live entirely in `.no_vibe/topics/`.
+
+### Mode A — Hybrid: append to CLAUDE.md
 
 Append the following section to this project's `CLAUDE.md` (create it if missing):
 
@@ -38,6 +48,10 @@ Topics `rule.md` files are loaded whole — the index handles routing by filenam
 
 Knowledge base files may include `<!-- last-verified: HASH -->`. If the area has changed since that commit, novibe prefixes the section with a staleness warning.
 ```
+
+### Mode B — Pure novibe: skip CLAUDE.md
+
+Skip the instruction file entirely. The knowledge base built in Step 2 is the full source of truth for novibe. If a team `CLAUDE.md` already exists in the repo, Claude Code will still read it for base behavior — novibe's KB adds on top at fill time.
 
 ## Step 2 — Generate the initial knowledge base
 
@@ -90,14 +104,17 @@ After completing the above steps, tell the user about the three loops they'll us
 - Use a fast/cheap profile for routine fills and a powerful profile for complex consult sessions.
 
 Finally, tell the user:
-- Add `.no_vibe/diffs.json` to `.gitignore` (transient working state, not meant to be committed)
+- Decide how to track `.no_vibe/` in git — that is up to you based on your team setup
 - They can add more topic folders at any time — update `topics/index.md` to register them
 
-## Step 5 — Optional: personal config
+## Step 5 — Personal config
 
-If the user wants personal preferences (task management, language settings, TTH coexistence rules, etc.), they can seed `.no_vibe/config.md` using a personal config seeder.
+Ask the user:
 
-Tell them:
-"If you have a personal novibe config seeder, run `:NovibeAgent` and point it at the seeder file. It will create or update `.no_vibe/config.md` with your personal preferences. If you don't have a seeder yet, there's an example at `examples/my-novibe-config-seeder.md` in the novibe.nvim repo."
+> **Is there any personal config you want to add to novibe?** (e.g. task management behavior, language preferences, agent session rules)
 
-Do not generate `config.md` yourself — it is personal and seeder-driven. This step is entirely optional and up to the user.
+If yes: "If you have a personal novibe config seeder, run `:NovibeAgent` and point it at the seeder file. It will create or update `.no_vibe/config.md` with your preferences. If you don't have a seeder yet, there's an example at `examples/my-novibe-config-seeder.md` in the novibe.nvim repo."
+
+If no: skip this step.
+
+Do not generate `config.md` yourself — it is personal and seeder-driven.

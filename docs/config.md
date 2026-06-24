@@ -7,6 +7,7 @@ Detailed reference for profiles, conventions, opencode integration, and `setup()
 ## Table of contents
 
 - [Fresh project setup](#fresh-project-setup)
+  - [Setup modes](#setup-modes)
 - [Profiles](#profiles)
 - [Provider differences](#provider-differences)
 - [Conventions](#conventions)
@@ -23,17 +24,22 @@ The fastest way to bootstrap conventions is to ask your AI CLI to do it:
 **Claude Code:**
 1. Open a terminal in your project root: `claude`
 2. Paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/docs/claude-init.md and follow the instructions."`
-3. The agent analyzes your project, generates the initial `topics/` knowledge base, and appends the novibe format spec to `CLAUDE.md`.
 
 **opencode:**
 1. Open a terminal in your project root: `opencode`
 2. Paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/docs/opencode-init.md and follow the instructions."`
-3. The agent analyzes your project, generates the initial `topics/` knowledge base, and appends the novibe format spec to `AGENTS.md`.
 
 **OpenAI Codex:**
 1. Open a terminal in your project root: `codex`
 2. Paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/docs/codex-init.md and follow the instructions."`
-3. The agent analyzes your project, generates the initial `topics/` knowledge base, and appends the novibe format spec to `AGENTS.md`.
+
+The agent asks two questions, then generates the initial `topics/` knowledge base. The init is safe to re-run as the project grows — it expands and merges, never overwrites.
+
+### Setup modes
+
+**Hybrid** — the novibe format spec is appended to `CLAUDE.md` / `AGENTS.md` so the AI CLI knows about `.no_vibe/` in all sessions, including interactive ones outside of novibe fills. Best when you already use these files for project conventions or want the whole team to benefit.
+
+**Pure novibe** — no instruction files needed. `.no_vibe/topics/` is the single source of truth; novibe injects context at fill time. Any existing team `CLAUDE.md` / `AGENTS.md` handles base CLI behavior only. Best for personal setups or projects where you don't want to touch shared instruction files.
 
 You can add more topic folders at any time — just update `topics/index.md` to register them.
 
