@@ -157,13 +157,21 @@ vim.api.nvim_create_user_command("NovibeStatus", function()
   if found then
     local names = {}
     if found.novibe_md then table.insert(names, "NO_VIBE.md") end
-    for _, f in ipairs(found.conventions) do
-      table.insert(names, ".no_vibe/" .. vim.fn.fnamemodify(f, ":t"))
+    if found.has_config  then table.insert(names, "config.md") end
+    if found.has_topics then
+      local rules = vim.fn.glob(found.novibe_dir .. "/topics/*/rule.md", false, true)
+      if #rules > 0 then
+        table.insert(names, string.format("topics (%d areas)", #rules))
+      end
     end
     for _, f in ipairs(found.learned) do
-      table.insert(names, ".no_vibe/" .. vim.fn.fnamemodify(f, ":t"))
+      table.insert(names, "act/" .. vim.fn.fnamemodify(f, ":t"))
     end
-    table.insert(lines, "Rules:    " .. table.concat(names, ", "))
+    if #names > 0 then
+      table.insert(lines, "Rules:    " .. table.concat(names, ", "))
+    else
+      table.insert(lines, "Rules:    .no_vibe/ found but empty")
+    end
     table.insert(lines, "Root:     " .. vim.fn.fnamemodify(found.root, ":~"))
   else
     table.insert(lines, "Rules:    none found (walked up from " .. vim.fn.fnamemodify(vim.fn.getcwd(), ":~") .. ")")
@@ -185,20 +193,40 @@ vim.api.nvim_create_user_command("NovibeKB", function()
   end
 
   local categories = {}
-  local function add(label, files)
-    if files and #files > 0 then
-      table.insert(categories, { label = label, files = files })
-    end
-  end
 
   if found.novibe_md then
     table.insert(categories, { label = "NO_VIBE.md", files = { found.novibe_md } })
   end
-  add("Convention", found.conventions)
-  add("Learn",      found.learned)
-  add("Map",        found.maps)
-  add("Rule",       found.rules)
-  add("Decision",   found.decisions)
+
+  local config_path = found.novibe_dir .. "/config.md"
+  if vim.fn.filereadable(config_path) == 1 then
+    table.insert(categories, { label = "Config", files = { config_path } })
+  end
+
+  local index_path = found.novibe_dir .. "/topics/index.md"
+  if vim.fn.filereadable(index_path) == 1 then
+    table.insert(categories, { label = "Topics Index", files = { index_path } })
+  end
+
+  if found.has_topics then
+    for _, dir_path in ipairs(vim.fn.glob(found.novibe_dir .. "/topics/*", false, true)) do
+      if vim.fn.isdirectory(dir_path) == 1 then
+        local area = vim.fn.fnamemodify(dir_path, ":t")
+        local topic_files = {}
+        for _, fname in ipairs({ "rule.md", "doc.md", "why.md" }) do
+          local fp = dir_path .. "/" .. fname
+          if vim.fn.filereadable(fp) == 1 then table.insert(topic_files, fp) end
+        end
+        if #topic_files > 0 then
+          table.insert(categories, { label = "topics/" .. area, files = topic_files })
+        end
+      end
+    end
+  end
+
+  if #found.learned > 0 then
+    table.insert(categories, { label = "Learned (act)", files = found.learned })
+  end
 
   if #categories == 0 then
     vim.notify("novibe: no .no_vibe files found", vim.log.levels.WARN)

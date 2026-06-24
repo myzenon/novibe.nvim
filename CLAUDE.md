@@ -36,12 +36,12 @@ lua/novibe/
   diag.lua     — vim.diagnostic.get() output formatted for the selection range
   apply.lua    — content-based find/replace across files (strict then lenient pass)
   glob.lua     — glob → Lua pattern + section header matching
-  no_vibe.lua  — loads NO_VIBE.md + .no_vibe/{convention,learned,doc,rule,decision}-*.md,
-                 filters by filename, stale detection via git log; find_novibe_dir() walks up
-  learn.lua    — #teach capture (.no_vibe/diffs.json) + distillation into learned-*.md
-  promote.lua  — :NovibePromote — graduate mature rules (n≥3) into convention files
+  no_vibe.lua  — loads NO_VIBE.md + config.md + topics/index.md→rule.md + act/learned-*.md,
+                 mode-filtered (act vs agent); stale detection via git log; find_novibe_dir() walks up
+  learn.lua    — #teach capture (.no_vibe/diffs.json) + distillation into act/learned-*.md
+  promote.lua  — :NovibePromote — graduate mature rules (n≥3) from act/learned-*.md into topics/<area>/rule.md
   consult.lua  — :NovibeConsult (vsplit advisory) + :NovibeAgent (replaces current buffer, full-access):
-                 both seed file/line/selection/conventions; Agent also injects agent-task.md state
+                 both seed file/line/selection/conventions; no task injection — agent reads task files per config.md
   providers/   — claude.lua, opencode.lua, codex.lua, antigravity.lua: find_bin,
                  build_cmd, parse_output, parse_chunk, streaming
 plugin/novibe.lua — guard + user commands
@@ -163,28 +163,23 @@ Act2 always passes `use_continue = false`. Each fill is a fresh session — no `
 - `:NovibeAct2` — alternative no-chat-window fill. AI code is written directly into the buffer; virt_lines above/below the scope show review controls (`<CR>` accept, `U` undo, `<leader>r` re-prompt, `<leader>t` teach, `<leader>o` peek out-of-scope changes). Review bar shows `<leader>o peek (N)` only when changes[] is non-empty. If AI returns no code, `vim.notify` the message and exit (no virt_lines). `#ask <question>` in the input float skips fill and opens a Consult session with context + question pre-seeded. Keys are cursor-guarded (only fire when cursor is inside scope). Two-phase `<leader>t` teach: first press accepts + enters edit mode, second press captures the diff and opens a reason float. Session is always fresh (no `--continue`). All keys configurable via `setup({ act2 = { keys = {...} } })`.
 - `:NovibeConsult` — singleton interactive session in a vsplit. Process dies with buffer; `<Esc><Esc>` exits terminal mode; `q` in normal mode closes the window; range injects selection. Seed = file, line, current commit hash, matched `.no_vibe` sections, snapshot instructions. Injected via `--append-system-prompt` (claude) or `--prompt-interactive` (antigravity). AI may freely edit `CLAUDE.md` and `.no_vibe/*.md`; all other files off-limits. Say **"snapshot"** mid-session to persist discoveries. **opencode workaround:** no flag exists, so use `:NovibeConsultPrompt` after opening — the seed is `chansend`-ed into the input box; press Enter to submit.
 - `:NovibeConsultPrompt` — build the consult seed from current buffer/selection and chansend it into the active consult terminal. Required for opencode; optional refresh for claude/codex/antigravity. Invoke from the source buffer, not the consult terminal.
-- `:NovibeAgent` — singleton full-access agent session; **replaces the current buffer** (not a vsplit). Full read/write project access. Mandatory task management via `.no_vibe/agent-task.md` — current task is injected into the seed. Uses `active_agent_profile` (independent of Act/Consult slots).
+- `:NovibeAgent` — singleton full-access agent session; **replaces the current buffer** (not a vsplit). Full read/write project access. Task management behavior driven by `.no_vibe/config.md` `## Agent` section; current task injected from `.no_vibe/agent/agent-task.md`. Uses `active_agent_profile` (independent of Act/Consult slots).
 - `:NovibeProfile` — two-step picker: slot (Act / Consult / Agent) then profile. Slots persist independently. No profile = CLI defaults.
-- `:NovibeDistill` — distill accumulated `#teach` diffs into `.no_vibe/learned-*.md` (AI decides the topic split).
-- `:NovibePromote` — graduate mature learned rules (n≥3) into canonical `.no_vibe/convention-*.md`; opens review split for inspection.
+- `:NovibeDistill` — distill accumulated `#teach` diffs into `.no_vibe/act/learned-*.md` (AI decides the topic split).
+- `:NovibePromote` — graduate mature learned rules (n≥3) from `act/learned-*.md` into canonical `.no_vibe/topics/<area>/rule.md`; opens review split for inspection. Also updates `topics/index.md` for new areas.
 
 ## Agent Task Management
 
-`:NovibeAgent` writes to three files in `.no_vibe/` (discovered by walking up from `cwd` via `no_vibe.find_novibe_dir()`). The agent's system prompt (`AGENT_HEADER`) instructs it to maintain these files automatically.
+Task management behavior is **prompt-driven via `.no_vibe/config.md` `## Agent` section** — not hardcoded in `AGENT_HEADER`. The Lua side only provides the mechanism: `read_agent_task()` reads the task file and injects it verbatim into the seed.
 
-**Files:**
-- `agent-task.md` — active task: goal, description, task list with `[x]`/`[ ]` checkboxes, optional PR/Files
-- `agent-task-paused.md` — paused/blocked tasks (multiple `## paused` sections)
-- `agent-task-completed.md` — append-only history of completed tasks (goal, date, summary, decisions)
+**Task files** live in `.no_vibe/agent/` (discovered by `no_vibe.find_novibe_dir()`):
+- `agent/agent-task.md` — active task
+- `agent/agent-task-paused.md` — paused tasks (multiple `## paused` sections)
+- `agent/agent-task-completed.md` — append-only history
 
-**Seed injection:** `build_agent_seed()` reads `agent-task.md` and appends its content as `CURRENT AGENT TASK:` at the end of the seed. If `agent-task.md` is absent, falls back to `task.md` (legacy) with a translate-format instruction.
+**Seed injection:** `build_agent_seed()` injects no task state — novibe has no opinion about task files. The agent reads task files itself, driven by instructions in `config.md ## Agent`.
 
-**Agent behaviors (prompt-driven, not Lua):**
-- Session start: scope-check the user's first message against the active Goal; suggest pause or abandon if out of scope (once per session only)
-- Task creation: write `agent-task.md` before doing any work on a new task
-- During work: mark `[x]` immediately when a task item is complete; advance `← current` to the next item
-- All done: append completed entry to `agent-task-completed.md`, clear `## current` content in `agent-task.md`
-- Pause: move `## current` to `agent-task-paused.md` as a `## paused` block, clear `agent-task.md`
+**Agent behaviors** are defined entirely in `config.md ## Agent` (not in Lua). This includes which task files to read, their format, and the full session lifecycle.
 
 ## CLI Invocation
 
@@ -300,50 +295,71 @@ Never uses line numbers. Two-pass:
 - `create` — `find` must be `""`; errors if the file exists
 - `delete` — `find` and `replace` must be `""`; closes any open buffer for that file
 
-## Convention, Learned Rule & Knowledge Base Files
+## Knowledge Base Files
 
-Plugin walks up from `cwd`, then filters all sections by current filename — AI receives only matching sections, never the full content. Both `:NovibeAct` and `:NovibeConsult` use all layers.
+`.no_vibe/` structure:
 
-Load order:
-1. `NO_VIBE.md` at project root — single-file shortcut for simple projects
-2. `.no_vibe/convention-*.md` — human-written coding rules
-3. `.no_vibe/learned-*.md` — auto-distilled from `#teach`
-4. `.no_vibe/doc-*.md` — **project documentation**: how features work, call chains, module descriptions, structural knowledge
-5. `.no_vibe/rule-*.md` — **behavioral constraints**: e.g. "always use Class X as db proxy"
-6. `.no_vibe/decision-*.md` — **architectural ADRs**: the why + rejected alternatives
-
-Section format (all files):
-```markdown
-## always                ← loaded for every file
-rules that always apply
-
-## src/db/**             ← loaded only for files under src/db/
-db-layer knowledge
-
-## *.tsx, *.jsx          ← multiple globs, comma-separated
-React rules
 ```
-Headers are comma-separated globs (`*` = non-separator, `**` = any path). `always` matches everything.
+.no_vibe/
+  config.md           — personal config: ## Always, ## Act, ## Agent sections
+  topics/
+    index.md          — routing: ## Area Name [glob] → topics/<area>/
+    <area>/
+      rule.md         — behavioral constraints for this area (act + agent)
+      doc.md          — structural knowledge, call chains (agent on-demand)
+      why.md          — architectural decisions, rejected alternatives (agent on-demand)
+  act/
+    learned-*.md      — auto-distilled from #teach
+  agent/
+    agent-task.md     — active task
+    agent-task-paused.md
+    agent-task-completed.md
+  NO_VIBE.md          — (project root) single-file shortcut for simple projects
+```
+
+**Load order** (`M.load(filename, mode)`):
+1. `NO_VIBE.md` — glob-section filtered (simple-project fallback)
+2. `config.md` — section filtered by mode: act→`## Always`+`## Act`, agent→`## Always`+`## Agent`
+3. `topics/index.md` → matched areas → `topics/<area>/rule.md` (whole file, no section filtering)
+4. `act/learned-*.md` — glob-section filtered (act mode only)
+
+**topics/index.md format:**
+```markdown
+## Area Name [src/feature/**]
+One-line description of when to load this topic.
+- topics/area/
+
+## Always
+Global rules that apply to every file.
+- topics/global/
+```
+Section headers use `[glob]` for filename matching; `## Always` matches everything.
+
+**config.md format:**
+```markdown
+## Always
+Rules that apply to both act and agent sessions.
+
+## Act
+Act-specific behavior (injected by :NovibeAct / :NovibeAct2 only).
+
+## Agent
+Agent-specific behavior (injected by :NovibeAgent / :NovibeConsult only).
+Task management instructions belong here.
+```
 
 ### Knowledge Base: Stale Detection
 
-`doc-*` / `rule-*` / `decision-*` sections support `<!-- last-verified: HASH -->`:
-
-```markdown
-## src/db/**
-<!-- last-verified: a3f9c2b -->
-All db interactions go through Class X (src/db/proxy.ts).
-```
-
-On load, `no_vibe.lua` runs `git log HASH..HEAD -- <path>` for directory-style headers. New commits → section prefixed with `⚠ STALE: N commit(s) since HASH — verify before trusting.`
+`topics/<area>/rule.md` / `doc.md` / `why.md` support `<!-- last-verified: HASH -->` at the top of the file. On load, `no_vibe.lua` runs `git log HASH..HEAD -- <path>` for directory-style index headers. New commits → content prefixed with `⚠ STALE: N commit(s) since HASH — verify before trusting.`
 
 ### Knowledge Base: Snapshot Workflow
 
-Built exclusively in `:NovibeConsult`. Say **"snapshot"** to have the AI write a discovery to the right file with the current commit hash. Grows lazily, focused on areas you actually touch.
+Built in `:NovibeConsult` and `:NovibeAgent`. Say **"snapshot"** to have the AI write a discovery to the right topic folder with the current commit hash. Grows lazily, focused on areas you actually touch.
 
-- `doc-<area>.md` — project documentation (how features work, call graphs, structural knowledge)
-- `rule-<area>.md` — behavioral (constraints on interacting with the area)
-- `decision-<area>.md` — reasoning (why, what was rejected)
+- `topics/<area>/doc.md` — project documentation (how features work, call graphs, structural knowledge)
+- `topics/<area>/rule.md` — behavioral (constraints on interacting with the area)
+- `topics/<area>/why.md` — reasoning (why, what was rejected)
+- `topics/index.md` — add/update the area entry with `[glob]` header
 
 Keep entries concise — a pointer to what matters, not a copy of the code.
 
@@ -359,7 +375,7 @@ Keep entries concise — a pointer to what matters, not a copy of the code.
 `:NovibeAct` picks diff vs note automatically: diff if `_last_fill` exists for the buffer and the selection differs from the last fill's output; otherwise note. Both require a non-empty reason if there's no diff to infer from.
 
 Auto-distillation threshold:
-- **1** when no `learned-*.md` exists yet (fresh project — fast feedback)
+- **1** when no `act/learned-*.md` exists yet (fresh project — fast feedback)
 - `learn.auto_extract_after` (default 3) once any learned file exists
 
-`M.extract()` sends accumulated diffs + existing `learned-*.md` to the AI to merge/dedupe and split by topic. Filenames must match `learned-[%w-]+%.md`. Diffs are cleared on success.
+`M.extract()` sends accumulated diffs + existing `act/learned-*.md` to the AI to merge/dedupe and split by topic. Filenames must match `learned-[%w-]+%.md` inside `act/`. Diffs are cleared on success.

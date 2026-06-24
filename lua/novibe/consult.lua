@@ -25,29 +25,29 @@ This is a CONSULT session. Your role is primarily advisory — discuss, explain,
 
 FILE WRITING RULES:
 - You MAY freely edit these files when the user asks:
-    CLAUDE.md, .no_vibe/convention-*.md, .no_vibe/learned-*.md
-    .no_vibe/doc-*.md, .no_vibe/rule-*.md, .no_vibe/decision-*.md
+    CLAUDE.md, .no_vibe/config.md, .no_vibe/topics/index.md,
+    .no_vibe/topics/*/rule.md, .no_vibe/topics/*/doc.md, .no_vibe/topics/*/why.md,
+    .no_vibe/act/learned-*.md
 - For ALL other files: do NOT modify them, write code to disk, or run shell commands.
 
 KNOWLEDGE BASE — when the user says "snapshot", "save this", or "remember this":
-Write what was just discovered to the appropriate .no_vibe/ file:
-  doc-<area>.md     — project documentation: how features work, call chains, structural knowledge
-  rule-<area>.md    — behavioral constraints: how to interact with each area (e.g. "always use Class X as proxy")
-  decision-<area>.md — the WHY: architectural decisions and rejected alternatives
+Write what was just discovered to the appropriate topic folder:
+  .no_vibe/topics/<area>/doc.md  — project documentation: how features work, call chains, structural knowledge
+  .no_vibe/topics/<area>/rule.md — behavioral constraints: how to interact with this area
+  .no_vibe/topics/<area>/why.md  — the WHY: architectural decisions and rejected alternatives
+  .no_vibe/topics/index.md       — add or update the entry for the area:
+                                     ## <Area Name> [<glob>]
+                                     <one-line description>
+                                     - topics/<area>/
 
-Each file uses glob section headers so only relevant sections load per file:
-  ## always              → always injected
-  ## src/db/**           → injected when working in src/db/
-  ## src/routes/routeA/** → injected when working in that route
-
-In each section you write, include a last-verified comment with the current commit hash:
+In each file you write, include a last-verified comment with the current commit hash:
   <!-- last-verified: COMMIT_HASH -->
 
 This lets the system warn the user if that area of the codebase has changed since the knowledge was written.
 
 EXISTING KNOWLEDGE — sections below marked ⚠ STALE mean that area has new commits since the knowledge was written. Treat stale sections as hints only — verify against the actual code before relying on them.
 
-Project conventions (.no_vibe/convention-*.md and .no_vibe/learned-*.md) use the same section format and are also injected below.]]
+Project conventions and personal config are injected below.]]
 
 local AGENT_HEADER = [[
 This is an AGENT session. You have full read/write access to the entire project.
@@ -72,16 +72,23 @@ STEP 2 — EXECUTE (only after the user explicitly confirms):
     the user already said "commit" or "push" earlier. Confirm the exact command first, then wait.
 
 KNOWLEDGE BASE — when the user says "snapshot", "save this", or "remember this":
-Write discoveries to the appropriate .no_vibe/ file with a last-verified comment:
-  doc-<area>.md      — project documentation: how features work, call chains, structural knowledge
-  rule-<area>.md     — behavioral constraints: how to interact with each area
-  decision-<area>.md — the WHY: architectural decisions and rejected alternatives
+Write discoveries to the appropriate topic folder with a last-verified comment:
+  .no_vibe/topics/<area>/rule.md — behavioral constraints: how to interact with this area
+  .no_vibe/topics/<area>/doc.md  — project documentation: features, call chains, structural knowledge
+  .no_vibe/topics/<area>/why.md  — the WHY: architectural decisions, rejected alternatives
+  .no_vibe/topics/index.md       — add or update the area entry:
+                                     ## <Area Name> [<glob>]
+                                     <one-line description>
+                                     - topics/<area>/
+
+In each file you write, include a last-verified comment with the current commit hash:
+  <!-- last-verified: COMMIT_HASH -->
 
 EXISTING KNOWLEDGE — sections marked ⚠ STALE have new commits since they were written. Verify before relying on them.
 
-KNOWLEDGE BASE (KB) — when the user says "KB", "the KB", or "our KB", they mean the .no_vibe/
-knowledge base files: convention-*.md, learned-*.md, doc-*.md, rule-*.md, decision-*.md.
-"Look at KB" = read those files. "Update KB" = write a discovery to the right file.
+KNOWLEDGE BASE (KB) — when the user says "KB", "the KB", or "our KB", they mean:
+  .no_vibe/topics/ and .no_vibe/config.md.
+  "Look at KB" = read those files. "Update KB" = write to the right topic folder.
 
 COMMANDS — recognize these phrases at any time:
   "restore context" / "reload context" / "refresh context"
@@ -92,57 +99,11 @@ COMMANDS — recognize these phrases at any time:
                Open a file in a new vsplit (does not replace this window). Run:
                  nvim --server "$NVIM" --remote-expr "execute('vsplit <filepath>')"
 
-AGENT TASK MANAGEMENT — mandatory, execute at session start before any other work:
-
-Task files live in .no_vibe/ — your current task is injected at the end of this seed.
-
-agent-task.md (active task):
-  ## current
-  **Goal:** <one-line goal — mandatory>
-  **Description:** <why/what — mandatory>
-  **PR:** #number (optional)
-  **Files:** key files (optional)
-  **Tasks:**
-  - [x] Completed item
-    - Note: what was done
-  - [ ] Next item ← current
-  - [ ] Future item
-
-agent-task-paused.md (paused tasks, multiple ## paused sections allowed):
-  ## paused
-  **Goal:** <goal>
-  **Reason:** <why paused>
-  **Tasks:**
-  - [ ] pending item
-
-agent-task-completed.md (append-only history):
-  ## <Goal>
-  **Completed:** YYYY-MM-DD
-  **PR:** #number (optional)
-  **Description:** <from task>
-  **Summary:** <paragraph: what was done and how>
-  **Decisions:** <key decisions> (optional)
-  **Done:**
-  - task item — note
-
-SESSION START (once, before anything else):
-  No active task → ask user what they are working on, then write agent-task.md before doing any work.
-    If legacy task content is shown below, translate it to agent-task.md format as the initial seed.
-  Active task → compare user's first message to the current Goal:
-    Same scope → confirm in one sentence and continue.
-    New scope  → say: "Your request is outside the current task: <Goal>.
-                 (1) Pause and start a new task, or (2) Abandon the current task?"
-    On pause   → append ## paused block to agent-task-paused.md, clear agent-task.md, ask for new task goal.
-    On abandon → clear agent-task.md, ask for new task goal.
-
-DURING WORK:
-  Task item complete → immediately update agent-task.md: mark [x], add Note, advance ← current.
-  All items [x]     → append completed entry to agent-task-completed.md, then clear ## current content in agent-task.md (keep file, remove content below the ## current header).
-
-Project conventions are injected below.]]
+Project conventions and personal config are injected below.]]
 
 -- Build the shared file/selection/conventions context block.
-local function build_context(line1, line2, has_range)
+-- mode: "act" (default) or "agent" — controls which config.md sections are loaded.
+local function build_context(line1, line2, has_range, mode)
   local prev_buf = vim.api.nvim_get_current_buf()
   local win      = vim.api.nvim_get_current_win()
   local filename = vim.api.nvim_buf_get_name(prev_buf)
@@ -154,7 +115,7 @@ local function build_context(line1, line2, has_range)
     selection = table.concat(lines, "\n")
   end
 
-  local no_vibe_txt = require("novibe.no_vibe").load(filename)
+  local no_vibe_txt = require("novibe.no_vibe").load(filename, mode or "act")
   local commit = vim.trim(vim.fn.system("git rev-parse HEAD 2>/dev/null"))
   if not commit:match("^[%x]+$") then commit = nil end
 
@@ -199,7 +160,7 @@ end
 -- Used by both :NovibeConsult (injected via CLI flag where supported) and
 -- :NovibeConsultPrompt (chansent into an already-running opencode terminal).
 local function build_seed(line1, line2, has_range)
-  return CONSULT_HEADER .. build_context(line1, line2, has_range)
+  return CONSULT_HEADER .. build_context(line1, line2, has_range, "agent")
 end
 
 local CLAUDE_PLAN_MODE = [[
@@ -211,44 +172,16 @@ For any multi-step implementation task, use them exactly as Claude Code does:
   3. Only implement after the user approves.
 Do this autonomously — do not wait for the user to ask you to plan.]]
 
--- Read agent-task.md from the nearest .no_vibe/ directory.
--- Falls back to task.md (legacy) if agent-task.md is absent.
--- Returns a formatted seed block, or nil if nothing found.
-local function read_agent_task()
-  local novibe_dir = require("novibe.no_vibe").find_novibe_dir()
-  if not novibe_dir then return nil end
-
-  local task_path   = novibe_dir .. "/agent-task.md"
-  local legacy_path = novibe_dir .. "/task.md"
-
-  if vim.fn.filereadable(task_path) == 1 then
-    local content = vim.trim(table.concat(vim.fn.readfile(task_path), "\n"))
-    if content ~= "" then
-      return "\nCURRENT AGENT TASK (.no_vibe/agent-task.md):\n" .. content
-    end
-    return "\nCURRENT AGENT TASK: none"
-  end
-
-  if vim.fn.filereadable(legacy_path) == 1 then
-    local content = vim.trim(table.concat(vim.fn.readfile(legacy_path), "\n"))
-    if content ~= "" then
-      return "\nCURRENT AGENT TASK: none"
-        .. "\nLEGACY TASK (.no_vibe/task.md — translate to agent-task.md format when creating the first task):\n"
-        .. content
-    end
-  end
-
-  return "\nCURRENT AGENT TASK: none"
-end
-
 -- Build the agent seed: full file access + plan-then-execute enforced.
+-- Task management behavior (including which files to read at session start) is
+-- defined entirely in the user's .no_vibe/config.md ## Agent section.
 local function build_agent_seed(line1, line2, has_range)
   local provider = require("novibe.config").options.provider or "claude"
   local header = AGENT_HEADER
   if provider == "claude" then
     header = header .. CLAUDE_PLAN_MODE
   end
-  return header .. build_context(line1, line2, has_range) .. (read_agent_task() or "")
+  return header .. build_context(line1, line2, has_range, "agent")
 end
 
 -- line1/line2/has_range: passed from command range (:'<,'>NovibeConsult)

@@ -33,7 +33,7 @@ end
 
 local function has_learned_rules()
   local dir = find_no_vibe_dir()
-  local files = vim.fn.glob(dir .. "/learned-*.md", false, true)
+  local files = vim.fn.glob(dir .. "/act/learned-*.md", false, true)
   for _, path in ipairs(files) do
     if vim.trim(table.concat(vim.fn.readfile(path), "\n")) ~= "" then
       return true
@@ -95,9 +95,10 @@ function M.extract(provider, bin, profile)
 
   local dir = find_no_vibe_dir()
 
-  -- read all existing learned-*.md files
+  -- read all existing act/learned-*.md files
+  local act_dir = dir .. "/act"
   local existing = {}
-  for _, path in ipairs(vim.fn.glob(dir .. "/learned-*.md", false, true)) do
+  for _, path in ipairs(vim.fn.glob(act_dir .. "/learned-*.md", false, true)) do
     local name = vim.fn.fnamemodify(path, ":t")
     existing[name] = table.concat(vim.fn.readfile(path), "\n")
   end
@@ -227,12 +228,12 @@ Filenames must match: learned-<topic>.md]],
       if ok3 and type(extracted) == "table" then files = extracted end
     end
 
-    if vim.fn.isdirectory(dir) == 0 then vim.fn.mkdir(dir, "p") end
+    if vim.fn.isdirectory(act_dir) == 0 then vim.fn.mkdir(act_dir, "p") end
 
     local written = {}
     for filename, content in pairs(files) do
       if filename:match("^learned%-[%w%-]+%.md$") then
-        vim.fn.writefile(vim.split(vim.trim(content), "\n", { plain = true }), dir .. "/" .. filename)
+        vim.fn.writefile(vim.split(vim.trim(content), "\n", { plain = true }), act_dir .. "/" .. filename)
         table.insert(written, filename)
       end
     end

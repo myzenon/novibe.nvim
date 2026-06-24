@@ -61,7 +61,7 @@ Bootstrap your project conventions by running your AI CLI in the project root:
 - **opencode** — start `opencode`, then paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/docs/opencode-init.md and follow the instructions."`
 - **Codex** — start `codex`, then paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/docs/codex-init.md and follow the instructions."`
 
-The agent analyzes your project, generates `.no_vibe/convention-project.md`, and writes the novibe format spec into `CLAUDE.md` (claude) / `AGENTS.md` (opencode, codex) so it auto-loads in future sessions.
+The agent analyzes your project, generates the initial `topics/` knowledge base, and writes the novibe format spec into `CLAUDE.md` (claude) / `AGENTS.md` (opencode, codex) so it auto-loads in future sessions.
 
 See [docs/config.md → Fresh project setup](./docs/config.md#fresh-project-setup) for details.
 
@@ -172,13 +172,13 @@ No auto-apply — you save each file yourself, so hallucinated paths never silen
 | `:NovibeGen`         | Generate new files — prompt if no pending files, list if pending. `<C-f>` change path · `<leader>r` re-prompt · `:w` save |
 | `:NovibeConsult`     | Open interactive advisory session in a vsplit; claude / codex / antigravity: context auto-injected; opencode: manual via `:NovibeConsultPrompt`. `q` closes in normal mode |
 | `:NovibeConsultPrompt` | Push consult seed into the active consult terminal (required for opencode; works with any provider) |
-| `:NovibeAgent`       | Open full-access agent session replacing the current buffer; mandatory task tracking via `.no_vibe/agent-task.md` |
+| `:NovibeAgent`       | Open full-access agent session replacing the current buffer; task behavior driven by `.no_vibe/config.md ## Agent` |
 | `:NovibeProfile`     | Two-step picker: choose slot (Act / Consult / Agent), then profile |
 | `:NovibeReset`       | Start a fresh session on the next fill                       |
 | `:NovibeStatus`      | Show profile, session, cost, ctx %, loaded rule files        |
-| `:NovibeKB`          | Browse all `.no_vibe` files by category (convention, learn, doc, rule, decision) |
+| `:NovibeKB`          | Browse all `.no_vibe` files by category (config, topics, learned) |
 | `:NovibeDistill`     | Force `#teach` distillation now                              |
-| `:NovibePromote`     | Review mature learned rules and graduate them to conventions |
+| `:NovibePromote`     | Review mature learned rules and graduate them to `topics/<area>/rule.md` |
 | `:NovibeActReviewFocus` | Focus the active fill-preview chat window (useful when in insert mode) |
 
 ---

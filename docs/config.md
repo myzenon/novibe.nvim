@@ -23,19 +23,19 @@ The fastest way to bootstrap conventions is to ask your AI CLI to do it:
 **Claude Code:**
 1. Open a terminal in your project root: `claude`
 2. Paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/docs/claude-init.md and follow the instructions."`
-3. The agent generates `.no_vibe/convention-project.md` and appends the novibe format spec to `CLAUDE.md` so it auto-loads in every future Claude Code session.
+3. The agent analyzes your project, generates the initial `topics/` knowledge base, and appends the novibe format spec to `CLAUDE.md`.
 
 **opencode:**
 1. Open a terminal in your project root: `opencode`
 2. Paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/docs/opencode-init.md and follow the instructions."`
-3. The agent generates `.no_vibe/convention-project.md` and appends the novibe format spec to `AGENTS.md`.
+3. The agent analyzes your project, generates the initial `topics/` knowledge base, and appends the novibe format spec to `AGENTS.md`.
 
 **OpenAI Codex:**
 1. Open a terminal in your project root: `codex`
 2. Paste: `"Read https://raw.githubusercontent.com/myzenon/novibe.nvim/main/docs/codex-init.md and follow the instructions."`
-3. The agent generates `.no_vibe/convention-project.md` and appends the novibe format spec to `AGENTS.md`.
+3. The agent analyzes your project, generates the initial `topics/` knowledge base, and appends the novibe format spec to `AGENTS.md`.
 
-You can add more `convention-*.md` files later (`convention-frontend.md`, `convention-style.md`, etc.). All matching files are loaded and merged.
+You can add more topic folders at any time — just update `topics/index.md` to register them.
 
 ---
 
@@ -150,119 +150,94 @@ All providers are first-class. novibe normalizes most of the differences (sessio
 
 ## Conventions
 
-novibe loads rules from these sources (in order):
+novibe loads knowledge from `.no_vibe/` in this order:
 
-1. `NO_VIBE.md` at project root — optional single-file shortcut
-2. `.no_vibe/convention-*.md` — human-written rules. Any number of files, named freely after `convention-`. Split however suits you (by topic, layer, ownership).
-3. `.no_vibe/learned-*.md` — auto-distilled from `#teach` (don't edit by hand)
-4. `.no_vibe/doc-*.md` — project documentation: how features work, call chains, module descriptions
-5. `.no_vibe/rule-*.md` — behavioral constraints: how to interact with each area
-6. `.no_vibe/decision-*.md` — architectural ADRs: the why behind decisions and rejected alternatives
-
-Files 4–6 form the **knowledge base** — written during `:NovibeConsult` sessions when you say "snapshot". They support stale detection: sections with a `<!-- last-verified: HASH -->` comment are prefixed with `⚠ STALE: N commit(s)` if the area has changed since that commit.
+1. `NO_VIBE.md` at project root — optional single-file shortcut for simple projects
+2. `.no_vibe/config.md` — personal config, filtered by mode (`## Always`, `## Act`, `## Agent`)
+3. `topics/index.md` → matched topic folders → `topics/<area>/rule.md`
+4. `.no_vibe/act/learned-*.md` — auto-distilled from `#teach` (act mode only, don't edit by hand)
 
 Example layout:
 
 ```
-NO_VIBE.md                ← optional single-file shortcut
+NO_VIBE.md                      ← optional single-file shortcut
 .no_vibe/
-  convention-project.md   ← project-wide rules
-  convention-frontend.md  ← split by topic
-  convention-me.md        ← personal preferences (gitignore this)
-  learned-style.md        ← auto-distilled (don't edit)
-  learned-react.md        ← auto-distilled (don't edit)
-  doc-auth.md             ← knowledge base: how the auth flow works
-  rule-db.md              ← knowledge base: always use Class X as db proxy
-  decision-api.md         ← knowledge base: why REST over GraphQL
-  diffs.json              ← transient working state (gitignore this)
+  config.md                     ← personal config (gitignore this)
+  topics/
+    index.md                    ← routing: area names + globs
+    global/
+      rule.md                   ← always-loaded global rules
+    react/
+      rule.md                   ← rules for React files
+      doc.md                    ← how the React layer works (agent on-demand)
+      why.md                    ← architectural decisions (agent on-demand)
+    db/
+      rule.md                   ← db interaction rules
+  act/
+    learned-style.md            ← auto-distilled (don't edit)
+    learned-react.md            ← auto-distilled (don't edit)
+  diffs.json                    ← transient working state (gitignore this)
 ```
 
-Only the `## always` section + sections matching the current filename are sent to the model — nothing leaks across file types.
+### topics/index.md
 
-### Format
-
-All rule files use the same section format:
+Routes filenames to topic folders. Only matching topics are loaded — nothing leaks across file types.
 
 ```markdown
-## always
-Rules that apply to every file in this project, regardless of type.
+## Always
+Rules and docs that load for every file.
+- topics/global/
 
-## *.tsx, *.jsx
-Rules that apply only when filling React component files.
+## React [*.tsx, *.jsx]
+React component conventions.
+- topics/react/
 
-## use*.ts, *.hook.ts
-Rules for React hook files.
-
-## *.api.ts, *.service.ts
-Rules for API/service layer files.
-
-## **/tests/**, *.test.ts, *.spec.ts
-Rules for test files.
+## Database [src/db/**]
+All database interaction goes through the proxy layer.
+- topics/db/
 ```
 
-**Section headers** are comma-separated glob patterns:
-- `*` matches anything except a path separator
-- `**` matches anything including path separators
-- `always` is a special header that always loads
+- `## Always` — loads for every file
+- `## Name [glob]` — loads when the current file matches the glob (comma-separated patterns allowed)
+- `*` matches within a segment, `**` matches across separators
 
-A hooks file never sees CSS conventions. A component file never sees backend rules.
+### topics/\<area\>/rule.md
 
-### Example `.no_vibe/convention-project.md`
+The behavioral rules for that area. Loaded whole when the index matches — no section filtering. Write directives only, no prose.
 
 ```markdown
-## always
 - ES6 named imports only — no default imports from libraries
 - TypeScript: explicit types on all function parameters and return values
-- No console.log, no TODO comments left in filled code
-- Error handling: never swallow errors silently
+- No console.log in filled code
 
 ## *.tsx, *.jsx
-- UI library: MUI only (@mui/material) — never introduce other UI libraries
-- Never use native HTML elements where MUI has an equivalent (use Box not div, Typography not p)
+- UI library: MUI only — never introduce other UI libraries
 - Styling: MUI sx prop only — never style={{}} inline objects
-- Components: functional only, no class components
-- Props: always define a typed Props interface above the component
-
-## use*.ts, *.hook.ts
-- Return plain values and functions — no JSX
-- Always clean up subscriptions and timers: return a cleanup function from useEffect
-- No direct API calls — use service layer functions
-
-## *.api.ts, *.service.ts
-- HTTP client: axios only — never fetch
-- Always handle errors explicitly, never return undefined on failure
-- Return typed responses — no any
-
-## *.test.ts, *.spec.ts, *.test.tsx
-- Testing library: Vitest + React Testing Library
-- No implementation detail testing — test behavior, not internals
-- Mock at the boundary: mock HTTP calls, not internal functions
 ```
 
-### Generating rules with AI
+Rule files can optionally use glob-section headers internally if needed (same `## glob` format), but most topic rule files are flat — the index already scoped them.
 
-Paste this prompt into your AI of choice (Claude Code, opencode, ChatGPT, etc.):
+### config.md
 
-> I want you to generate a `.no_vibe/convention-project.md` file for my project. This file tells an AI code-filling tool which conventions to follow when filling in code.
->
-> **Format rules:**
-> - Use `## always` for rules that apply to every file
-> - Use `## *.ext` headers (glob patterns) for file-type-specific rules
-> - Multiple patterns per header are comma-separated: `## *.tsx, *.jsx`
-> - Rules should be short, directive, and unambiguous — one rule per line starting with `-`
-> - Do NOT explain why, do NOT add prose — only rules the AI must follow
-> - Rules should be constraints on what to use/not use, not general advice
->
-> **My project:**
-> [describe your stack, libraries, patterns, and anything the AI should always or never do]
->
-> Generate the file now.
+Personal preferences that don't belong in shared project knowledge. Filtered by command:
+- `:NovibeAct` / `:NovibeAct2` → `## Always` + `## Act`
+- `:NovibeAgent` / `:NovibeConsult` → `## Always` + `## Agent`
 
-**Tips for good rules:**
-- **Be specific about libraries**: "MUI only" not "use a UI library"
-- **Name what to avoid**: "never style={{}}" beats "prefer sx prop"
-- **One decision per rule**: don't combine multiple constraints in one line
-- **File-type rules should be truly file-type specific** — if it applies everywhere, put it in `always`
+Seed it with your personal config seeder (see `examples/my-novibe-config-seeder.md` in the novibe.nvim repo). Gitignore it if it contains personal preferences you don't want committed.
+
+### Adding global conventions across all projects
+
+For rules that apply to every project regardless of codebase, append them to the system prompt:
+
+```lua
+require("novibe").setup({
+  system_prompt = require("novibe.config").defaults.system_prompt .. [[
+
+Personal conventions (always apply):
+- Prefer early returns over nested conditionals
+- No magic numbers: extract constants with descriptive names
+]],
+})
 
 ---
 
@@ -283,7 +258,7 @@ require("novibe").setup({
   learn = {
     auto_extract_after = 3,
     -- Number of #teach diffs that triggers automatic distillation.
-    -- On a fresh project (no learned-*.md yet) the threshold is forced to 1
+    -- On a fresh project (no act/learned-*.md yet) the threshold is forced to 1
     -- for fast feedback, regardless of this value.
     -- Set to nil to disable auto-distillation (use :NovibeDistill manually).
     -- See docs/teach.md for the full teach → distill → promote lifecycle.
@@ -305,22 +280,6 @@ require("novibe").setup({
   system_prompt = "...",
   -- Override the default system prompt entirely, or append to it:
   -- require("novibe.config").defaults.system_prompt .. "\nyour additions"
-})
-```
-
-### Adding global conventions across all projects
-
-Conventions in `.no_vibe/` are per-project. If you want rules that apply across every project, append them to the system prompt — they bypass the convention file system entirely:
-
-```lua
-require("novibe").setup({
-  system_prompt = require("novibe.config").defaults.system_prompt .. [[
-
-Personal conventions (always apply):
-- Prefer early returns over nested conditionals
-- Functional style: prefer map/filter/reduce over imperative loops
-- No magic numbers: extract constants with descriptive names
-]],
 })
 ```
 
