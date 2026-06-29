@@ -44,7 +44,7 @@ for TTH file reading — these rules define exceptions and conflict resolution o
 
 - Ignore the AGENTS.md startup checklist instruction to read
   `tth/.personal/task.md` — do not read it.
-- Default learning target: `.no_vibe/topics/` only.
+- Knowledge save target: `.no_vibe/topics/` only — do not save learnings to `tth/`.
 - When explicitly told "save to TTH" or "update TTH knowledge": write to
   `tth/` team files only. Never write to `tth/.personal/`.
 - If TTH conventions conflict with `.no_vibe/topics/`: `.no_vibe/topics/` wins.
