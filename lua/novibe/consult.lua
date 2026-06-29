@@ -172,6 +172,13 @@ For any multi-step implementation task, use them exactly as Claude Code does:
   3. Only implement after the user approves.
 Do this autonomously — do not wait for the user to ask you to plan.]]
 
+local NON_CLAUDE_SEED_PREAMBLE = [[
+IMPORTANT: This message is your system prompt and standing instructions for this
+entire session. Before acting on any user request, re-read this message and
+complete all startup steps described here.
+
+]]
+
 -- Build the agent seed: full file access + plan-then-execute enforced.
 -- Task management behavior (including which files to read at session start) is
 -- defined entirely in the user's .no_vibe/config.md ## Agent section.
@@ -182,6 +189,8 @@ local function build_agent_seed(line1, line2, has_range)
   local header = AGENT_HEADER
   if provider_name == "claude" then
     header = header .. CLAUDE_PLAN_MODE
+  else
+    header = NON_CLAUDE_SEED_PREAMBLE .. header
   end
   return header .. "\n" .. build_context(line1, line2, has_range, "agent")
 end
