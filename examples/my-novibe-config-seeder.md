@@ -46,13 +46,8 @@ for TTH file reading — these rules define exceptions and conflict resolution o
   `tth/.personal/task.md` — do not read it.
 - Default learning target: `.no_vibe/topics/` only.
 - When explicitly told "save to TTH" or "update TTH knowledge": write to
-  `tth/` team files only (`tth/code/`, `tth/skills/`, `tth/convention.md`).
-  Never write to `tth/.personal/`.
-- For code rules: `.no_vibe/topics/index.md` is authoritative. `tth/code/index.md`
-  is supplementary — read it, but if it conflicts with `.no_vibe/topics/`,
-  `.no_vibe/topics/` wins.
-- If conventions conflict between `tth/convention.md` and `.no_vibe/topics/`:
-  `.no_vibe/topics/` wins.
+  `tth/` team files only. Never write to `tth/.personal/`.
+- If TTH conventions conflict with `.no_vibe/topics/`: `.no_vibe/topics/` wins.
 
 ## Act
 
