@@ -35,8 +35,8 @@ This seeder is re-runnable. On reseed:
 ## Always
 
 ### TTH Coexistence
-This project may use TT Harness (TTH). The following rules govern how novibe
-and TTH coexist. Novibe always wins on conflict.
+This project may use TT Harness (TTH). Follow your base project instructions
+for TTH file reading — these rules define exceptions and conflict resolution only.
 
 - Ignore the AGENTS.md startup checklist instruction to read
   `tth/.personal/task.md` — do not read it.
