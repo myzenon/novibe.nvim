@@ -34,6 +34,10 @@ This seeder is re-runnable. On reseed:
 
 ## Always
 
+These rules are overrides and additions. After loading this config, complete
+your full base project startup sequence — do not stop early because this config
+has been read.
+
 ### TTH Coexistence
 This project may use TT Harness (TTH). Follow your base project instructions
 for TTH file reading — these rules define exceptions and conflict resolution only.
