@@ -40,7 +40,6 @@ and TTH coexist. Novibe always wins on conflict.
 
 - Ignore the AGENTS.md startup checklist instruction to read
   `tth/.personal/task.md` — do not read it.
-- `tth/.personal/` is abandoned — never read or write any file inside it.
 - Default learning target: `.no_vibe/topics/` only.
 - When explicitly told "save to TTH" or "update TTH knowledge": write to
   `tth/` team files only (`tth/code/`, `tth/skills/`, `tth/convention.md`).
