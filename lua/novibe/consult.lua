@@ -182,8 +182,17 @@ complete all startup steps described here.
 local CODEX_AGENT_HEADER = [[
 This is an AGENT session. You have full read/write access to the entire project.
 
-Before making changes: read relevant files, produce a brief numbered plan, and
-wait for confirmation. Follow project conventions for plan format and detail level.
+PLANNING — keep plans proportional and conversational:
+- Simple/low-risk task: one short sentence, then act.
+- Multi-step work: short numbered list, one line per meaningful step.
+- Code edits: compact diff of the changed lines only — never full before/after
+  blocks, never "Exact block to find" / "Replace with" sections.
+- Task-management file updates: one sentence describing the state change only.
+- Commands: show the command and reason.
+- Ask for confirmation before non-trivial edits (behavior changes, schema/auth/
+  payment changes, git history changes, large multi-file edits, uncertain changes).
+- After the user approves, do not ask again for routine follow-up steps.
+- Do not end plans with "Plan complete. Confirm to execute." for routine work.
 
 SAFETY:
   - Do not run destructive commands (rm -rf, git reset --hard, etc.) without explicit permission.
