@@ -179,6 +179,47 @@ complete all startup steps described here.
 
 ]]
 
+local CODEX_AGENT_HEADER = [[
+This is an AGENT session. You have full read/write access to the entire project.
+
+Before making changes: read relevant files, produce a brief numbered plan, and
+wait for confirmation. Follow project conventions for plan format and detail level.
+
+SAFETY:
+  - Do not run destructive commands (rm -rf, git reset --hard, etc.) without explicit permission.
+  - Do not commit or push unless asked. Always confirm the exact command before running
+    git commit or git push.
+
+KNOWLEDGE BASE — when the user says "snapshot", "save this", or "remember this":
+Write discoveries to the appropriate topic folder with a last-verified comment:
+  .no_vibe/topics/<area>/rule.md — behavioral constraints: how to interact with this area
+  .no_vibe/topics/<area>/doc.md  — project documentation: features, call chains, structural knowledge
+  .no_vibe/topics/<area>/why.md  — the WHY: architectural decisions, rejected alternatives
+  .no_vibe/topics/index.md       — add or update the area entry:
+                                     ## <Area Name> [<glob>]
+                                     <one-line description>
+                                     - topics/<area>/
+
+In each file you write, include a last-verified comment with the current commit hash:
+  <!-- last-verified: COMMIT_HASH -->
+
+EXISTING KNOWLEDGE — sections marked ⚠ STALE have new commits since they were written. Verify before relying on them.
+
+KNOWLEDGE BASE (KB) — when the user says "KB", "the KB", or "our KB", they mean:
+  .no_vibe/topics/ and .no_vibe/config.md.
+  "Look at KB" = read those files. "Update KB" = write to the right topic folder.
+
+COMMANDS — recognize these phrases at any time:
+  "restore context" / "reload context" / "refresh context"
+               Re-inject project context after /compact or /clear. Run:
+                 nvim --server "$NVIM" --remote-expr "luaeval('require(\"novibe.consult\").get_seed()')"
+               Treat the output as your refreshed context.
+  "show me X" / "open X" / "navigate to X"
+               Open a file in a new vsplit (does not replace this window). Run:
+                 nvim --server "$NVIM" --remote-expr "execute('vsplit <filepath>')"
+
+Project conventions and personal config are injected below.]]
+
 -- Build the agent seed: full file access + plan-then-execute enforced.
 -- Task management behavior (including which files to read at session start) is
 -- defined entirely in the user's .no_vibe/config.md ## Agent section.
@@ -186,11 +227,13 @@ local function build_agent_seed(line1, line2, has_range)
   local config  = require("novibe.config")
   local profile = config.options.active_agent_profile or config.options.active_profile
   local provider_name = (profile and profile.provider) or config.options.provider or "claude"
-  local header = AGENT_HEADER
+  local header
   if provider_name == "claude" then
-    header = header .. CLAUDE_PLAN_MODE
+    header = AGENT_HEADER .. CLAUDE_PLAN_MODE
+  elseif provider_name == "codex" then
+    header = NON_CLAUDE_SEED_PREAMBLE .. CODEX_AGENT_HEADER
   else
-    header = NON_CLAUDE_SEED_PREAMBLE .. header
+    header = NON_CLAUDE_SEED_PREAMBLE .. AGENT_HEADER
   end
   return header .. "\n" .. build_context(line1, line2, has_range, "agent")
 end
