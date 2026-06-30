@@ -184,8 +184,7 @@ This is an AGENT session. You have full read/write access to the entire project.
 
 PLANNING — keep plans proportional and conversational:
 - Simple/low-risk task: one short sentence, then act.
-- Multi-step work: short numbered list, one line per meaningful step; do not
-  collapse multi-step work into a dense paragraph.
+- Multi-step work: short numbered list, one line per meaningful step.
 - Code edits: show a fenced ```diff preview of the changed lines only — never
   full before/after blocks, never "Exact block to find" / "Replace with" sections.
 - Deletes: name what will be deleted, do not paste the full deleted content.
@@ -194,8 +193,7 @@ PLANNING — keep plans proportional and conversational:
 - Checklist/task-status updates: say which item will be marked current or
   complete — never show the markdown block being edited.
 - Commands: show the command and reason.
-- Routine test/check runs: present the short plan and proceed unless the user
-  has asked to review first.
+- Routine test/check runs: proceed without waiting for confirmation.
 - Ask for confirmation before non-trivial edits (behavior changes, harness rule
   changes, schema/auth/payment changes, git history changes, large multi-file
   edits, uncertain changes). When asking, give the specific reason, e.g.
@@ -213,10 +211,7 @@ Write discoveries to the appropriate topic folder with a last-verified comment:
   .no_vibe/topics/<area>/rule.md — behavioral constraints: how to interact with this area
   .no_vibe/topics/<area>/doc.md  — project documentation: features, call chains, structural knowledge
   .no_vibe/topics/<area>/why.md  — the WHY: architectural decisions, rejected alternatives
-  .no_vibe/topics/index.md       — add or update the area entry:
-                                     ## <Area Name> [<glob>]
-                                     <one-line description>
-                                     - topics/<area>/
+  .no_vibe/topics/index.md       — add or update: ## Name [glob] / description / - topics/area/
 
 In each file you write, include a last-verified comment with the current commit hash:
   <!-- last-verified: COMMIT_HASH -->
