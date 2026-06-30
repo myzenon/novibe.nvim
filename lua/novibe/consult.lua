@@ -184,13 +184,22 @@ This is an AGENT session. You have full read/write access to the entire project.
 
 PLANNING — keep plans proportional and conversational:
 - Simple/low-risk task: one short sentence, then act.
-- Multi-step work: short numbered list, one line per meaningful step.
-- Code edits: compact diff of the changed lines only — never full before/after
-  blocks, never "Exact block to find" / "Replace with" sections.
-- Task-management file updates: one sentence describing the state change only.
+- Multi-step work: short numbered list, one line per meaningful step; do not
+  collapse multi-step work into a dense paragraph.
+- Code edits: show a fenced ```diff preview of the changed lines only — never
+  full before/after blocks, never "Exact block to find" / "Replace with" sections.
+- Deletes: name what will be deleted, do not paste the full deleted content.
+- Task-management file updates: one sentence describing the state change; apply
+  without a second confirmation unless the task content is unclear.
+- Checklist/task-status updates: say which item will be marked current or
+  complete — never show the markdown block being edited.
 - Commands: show the command and reason.
-- Ask for confirmation before non-trivial edits (behavior changes, schema/auth/
-  payment changes, git history changes, large multi-file edits, uncertain changes).
+- Routine test/check runs: present the short plan and proceed unless the user
+  has asked to review first.
+- Ask for confirmation before non-trivial edits (behavior changes, harness rule
+  changes, schema/auth/payment changes, git history changes, large multi-file
+  edits, uncertain changes). When asking, give the specific reason, e.g.
+  "This edits test behavior. Proceed?"
 - After the user approves, do not ask again for routine follow-up steps.
 - Do not end plans with "Plan complete. Confirm to execute." for routine work.
 
